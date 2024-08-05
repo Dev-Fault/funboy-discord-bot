@@ -21,25 +21,26 @@ struct OutputLog {
 
 impl OutputLog {
     fn from(user_input: Vec<&str>, changes: Vec<&str>) -> Self {
-        let mut present: String = user_input
-            .iter()
-            .filter(|input| changes.contains(input))
-            .map(|s| s.to_string() + " ")
-            .collect();
-
-        let mut not_present: String = user_input
-            .iter()
-            .filter(|input| !changes.contains(input))
-            .map(|s| s.to_string() + " ")
-            .collect();
-
-        present.pop();
-        not_present.pop();
-
         OutputLog {
-            present,
-            not_present,
+            present: Self::stringify(&user_input, |input| changes.contains(&input)),
+            not_present: Self::stringify(&user_input, |input| !changes.contains(&input)),
         }
+    }
+
+    fn stringify(strings: &Vec<&str>, predicate: impl Fn(&str) -> bool) -> String {
+        let mut output: String = strings
+            .iter()
+            .filter(|input| predicate(input))
+            .map(|s| {
+                if s.contains(' ') {
+                    format!("{}{}{}", "\"", s, "\" ")
+                } else {
+                    s.to_string() + " "
+                }
+            })
+            .collect();
+        output.pop();
+        output
     }
 }
 
@@ -52,6 +53,7 @@ struct QuoteFilter<'a> {
 impl<'a> QuoteFilter<'a> {
     pub fn from(input: &'a str) -> Self {
         const EMPTY: (&str, &str) = ("", "");
+
         let mut quoted: Vec<&str> = Vec::new();
         let mut unquoted: Vec<&str> = Vec::new();
 
@@ -64,22 +66,22 @@ impl<'a> QuoteFilter<'a> {
         }
 
         while first_split != None && second_split != None {
-            push_if_not_empty(&mut unquoted, first_split.unwrap_or(EMPTY).0.trim());
-            push_if_not_empty(&mut quoted, second_split.unwrap_or(EMPTY).0.trim());
+            Self::push_if_not_empty(&mut unquoted, first_split.unwrap_or(EMPTY).0.trim());
+            Self::push_if_not_empty(&mut quoted, second_split.unwrap_or(EMPTY).0.trim());
             first_split = (second_split).unwrap_or(EMPTY).1.split_once("\"");
             left_overs = second_split.unwrap_or(EMPTY).1;
             second_split = (first_split).unwrap_or(EMPTY).1.split_once("\"");
         }
 
-        push_if_not_empty(&mut unquoted, left_overs.trim());
+        Self::push_if_not_empty(&mut unquoted, left_overs.trim());
 
         QuoteFilter { quoted, unquoted }
     }
-}
 
-fn push_if_not_empty<'a>(input: &mut Vec<&'a str>, value: &'a str) {
-    if !value.is_empty() {
-        input.push(value);
+    fn push_if_not_empty<'b>(input: &mut Vec<&'b str>, value: &'b str) {
+        if !value.is_empty() {
+            input.push(value);
+        }
     }
 }
 
@@ -127,14 +129,14 @@ pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Res
 
     let mut db = ctx.data().t_db.lock().await;
 
-    let subs: Vec<&str> = vectorize_input(substitutes.as_str());
+    let subs_to_insert: Vec<&str> = vectorize_input(substitutes.as_str());
 
-    match db.insert_substitutions(&template, Some(&subs)) {
+    match db.insert_substitutions(&template, Some(&subs_to_insert)) {
         Err(e) => {
             ctx.say(e.to_string()).await?;
         }
-        Ok(change_log) => {
-            let output_log = OutputLog::from(subs, change_log.subs);
+        Ok(inserted_subs) => {
+            let output_log = OutputLog::from(subs_to_insert, inserted_subs);
 
             ctx.say(format!(
                 "Added substitutes [{}] under template {}.",
@@ -163,9 +165,9 @@ pub async fn remove_substitutes(
 ) -> Result<(), Error> {
     let mut db = ctx.data().t_db.lock().await;
 
-    let subs: Vec<&str> = vectorize_input(substitutes.as_str());
+    let subs_to_remove: Vec<&str> = vectorize_input(substitutes.as_str());
 
-    match db.remove_substitutes(&template, &subs) {
+    match db.remove_substitutes(&template, &subs_to_remove) {
         Err(e) => match e {
             rusqlite::Error::QueryReturnedNoRows => {
                 ctx.say(format!("Error: No template named {} exists.", &template))
@@ -175,8 +177,8 @@ pub async fn remove_substitutes(
                 ctx.say(e.to_string()).await?;
             }
         },
-        Ok(change_log) => {
-            let output_log = OutputLog::from(subs, change_log.subs);
+        Ok(removed_subs) => {
+            let output_log = OutputLog::from(subs_to_remove, removed_subs);
             ctx.say(format!(
                 "Removed substitutes [{}] from template {}.",
                 output_log.present, &template
