@@ -187,52 +187,29 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
         Some(tmp) => match db.get_substitutes(&tmp) {
             Ok(subs) => {
                 if subs.is_empty() {
-                    ctx.send(
-                        CreateReply::default()
-                            .content(format!("No substitutes in template {}", tmp))
-                            .ephemeral(true),
-                    )
-                    .await?;
+                    ctx.say_ephemeral(&format!("No substitutes in template {}", tmp)[..])
+                        .await?;
                 } else {
-                    for message in split_message(&format_output_vector(subs)) {
-                        ctx.defer_ephemeral().await?;
-                        ctx.send(CreateReply::default().content(&message).ephemeral(true))
-                            .await?;
-                    }
+                    ctx.say_vec(subs, true).await?;
                 }
             }
             _ => {
-                ctx.send(
-                    CreateReply::default()
-                        .content("Error: Couldn't get subsitutes.")
-                        .ephemeral(true),
-                )
-                .await?;
+                ctx.say_ephemeral("Error: Couldn't get subsitutes.").await?;
             }
         },
         None => match db.get_templates() {
             Ok(tmps) => {
                 if tmps.is_empty() {
-                    ctx.send(
-                        CreateReply::default()
-                            .content("There are currently no templates. Try creaing some with /add")
-                            .ephemeral(true),
+                    ctx.say_ephemeral(
+                        "There are currently no templates. Try creaing some with /add",
                     )
                     .await?;
                 } else {
-                    for message in split_message(&format_output_vector(tmps)) {
-                        ctx.send(CreateReply::default().content(&message).ephemeral(true))
-                            .await?;
-                    }
+                    ctx.say_vec(tmps, true).await?;
                 }
             }
             _ => {
-                ctx.send(
-                    CreateReply::default()
-                        .content("Error: Couldn't get templates.")
-                        .ephemeral(true),
-                )
-                .await?;
+                ctx.say_ephemeral("Error: Couldn't get templates.").await?;
             }
         },
     }
@@ -244,25 +221,17 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
     let db = ctx.data().t_db.lock().await;
     let mut interpolator = TextInterpolator::default();
 
-    let output = interpolator.interp(&text, &|s| match db.get_substitutes(s) {
-        Ok(subs) => {
-            if subs.len() > 0 && !subs[0].is_empty() {
-                let mut rng = rand::thread_rng();
-                let i: usize = rng.gen_range(0..subs.len());
-                Some(subs[i].clone())
-            } else {
-                None
-            }
-        }
-        Err(_) => None,
-    });
+    let output = interpolator.interp(
+        &text,
+        &|template| match db.get_random_substitute(template) {
+            Ok(sub) => Some(sub),
+            Err(_) => None,
+        },
+    );
 
     match output {
         Ok(o) => {
-            for message in split_long_string(&o) {
-                ctx.send(CreateReply::default().content(message).ephemeral(false))
-                    .await?;
-            }
+            ctx.multi_say(&o).await?;
         }
         Err(e) => {
             ctx.say(format!("Error: {e}")).await?;
