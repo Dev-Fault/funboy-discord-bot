@@ -1,6 +1,26 @@
 use super::*;
-use poise::serenity_prelude::{self as serenity};
+use poise::{
+    samples::HelpConfiguration,
+    serenity_prelude::{self as serenity},
+};
 use rand::Rng;
+
+/// Displays help information for commands
+#[poise::command(slash_command, prefix_command)]
+pub async fn help(ctx: Context<'_>, command: Option<String>) -> Result<(), Error> {
+    let bottom_text = "\
+    Type '/help name_of_command' for more info on a specific command.";
+
+    let config = HelpConfiguration {
+        show_subcommands: false,
+        show_context_menu_commands: false,
+        ephemeral: true,
+        extra_text_at_bottom: bottom_text,
+        ..Default::default()
+    };
+    poise::builtins::help(ctx, command.as_deref(), config).await?;
+    Ok(())
+}
 
 #[poise::command(prefix_command)]
 pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
@@ -8,6 +28,7 @@ pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Displays the age of a users account.
 #[poise::command(slash_command, prefix_command)]
 pub async fn age(
     ctx: Context<'_>,
@@ -19,6 +40,7 @@ pub async fn age(
     Ok(())
 }
 
+/// Generates a random number between a minimum and maximum value.
 #[poise::command(slash_command, prefix_command)]
 pub async fn random_number(ctx: Context<'_>, min: String, max: String) -> Result<(), Error> {
     match rng(min, max) {

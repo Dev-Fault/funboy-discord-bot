@@ -12,14 +12,17 @@ async fn main() {
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
             commands: vec![
+                commands::miscellaneous::help(),
                 commands::miscellaneous::register(),
                 commands::miscellaneous::random_number(),
                 commands::miscellaneous::age(),
                 commands::text_gen::add(),
-                commands::text_gen::remove_substitutes(),
+                commands::text_gen::add_sub(),
+                commands::text_gen::remove_sub(),
+                commands::text_gen::remove_subs(),
                 commands::text_gen::remove_template(),
                 commands::text_gen::rename_template(),
-                commands::text_gen::rename_substitute(),
+                commands::text_gen::replace_sub(),
                 commands::text_gen::generate(),
                 commands::text_gen::list(),
             ],
