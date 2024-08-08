@@ -3,4 +3,5 @@ use tokio::sync::Mutex;
 
 mod io_util;
 pub mod miscellaneous;
+pub mod sound;
 pub mod text_gen;

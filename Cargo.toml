@@ -9,3 +9,12 @@ text_interpolator = { path = "/home/dustin/Documents/developer/rust_programs/tex
 poise = "0.6.1"
 tokio = {version = "1.39.2", features = ["full"]}
 rand = "0.8.5"
+reqwest = "0.11"
+
+[dependencies.songbird]
+version = "0.4"
+features = ["builtin-queue"]
+
+[dependencies.symphonia]
+version = "0.5.2"
+features = ["mp3", "aac", "isomp4", "alac"]

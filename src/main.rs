@@ -1,4 +1,6 @@
 use poise::serenity_prelude::{self as serenity};
+use reqwest::Client as HttpClient;
+use songbird::{typemap::TypeMapKey, SerenityInit};
 use template_substitution_database::TemplateDatabase;
 use tokio::sync::Mutex;
 
@@ -10,6 +12,12 @@ pub struct Data {
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
+
+struct HttpKey;
+
+impl TypeMapKey for HttpKey {
+    type Value = HttpClient;
+}
 
 //test
 #[tokio::main]
@@ -35,6 +43,9 @@ async fn main() {
                 commands::text_gen::replace_sub(),
                 commands::text_gen::generate(),
                 commands::text_gen::list(),
+                commands::sound::join_voice(),
+                commands::sound::leave_voice(),
+                commands::sound::play_url(),
             ],
             ..Default::default()
         })
@@ -54,6 +65,8 @@ async fn main() {
 
     let client = serenity::ClientBuilder::new(token, intents)
         .framework(framework)
+        .register_songbird()
+        .type_map_insert::<HttpKey>(HttpClient::new())
         .await;
     client.unwrap().start().await.unwrap();
 }
