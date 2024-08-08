@@ -4,6 +4,14 @@ use tokio::sync::Mutex;
 
 mod commands;
 
+pub struct Data {
+    pub t_db: Mutex<TemplateDatabase>,
+} // User data, which is stored and accessible in all command invocations
+
+pub type Error = Box<dyn std::error::Error + Send + Sync>;
+pub type Context<'a> = poise::Context<'a, Data, Error>;
+
+//test
 #[tokio::main]
 async fn main() {
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
@@ -16,7 +24,7 @@ async fn main() {
                 commands::miscellaneous::register(),
                 commands::miscellaneous::random_number(),
                 commands::miscellaneous::random_word(),
-                commands::miscellaneous::move_pinned_messages(),
+                commands::miscellaneous::move_bot_pins(),
                 commands::miscellaneous::age(),
                 commands::text_gen::add(),
                 commands::text_gen::add_sub(),
@@ -33,7 +41,8 @@ async fn main() {
         .setup(|ctx, _ready, framework| {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
-                Ok(commands::Data {
+
+                Ok(Data {
                     t_db: Mutex::new(
                         TemplateDatabase::from_path("funboy.db")
                             .expect("Failed to load funboy database."),

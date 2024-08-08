@@ -1,8 +1,11 @@
+use crate::{Context, Error};
+
 use super::*;
-use io_util::vectorize_input;
+use io_util::{extract_image_urls, vectorize_input, MessageHelper};
 use poise::{
     samples::HelpConfiguration,
-    serenity_prelude::{self as serenity, ChannelId},
+    serenity_prelude::{self as serenity, ChannelId, CreateEmbed, CreateMessage},
+    CreateReply,
 };
 use rand::Rng;
 
@@ -29,21 +32,54 @@ pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Moves and unpins pinned messages to the selected channel
+/// Moves pinned messages posted by the bot to a selected channel
 ///
-/// Example usage: **/move_pinned_messages** to_channel: **my-channel**
+/// Example usage: **/move_bot_pins** to_channel: **my-channel**
 #[poise::command(slash_command, prefix_command)]
-pub async fn move_pinned_messages(ctx: Context<'_>, to_channel: String) -> Result<(), Error> {
+pub async fn move_bot_pins(ctx: Context<'_>, to_channel: String) -> Result<(), Error> {
     if let Some(to_id) = get_channel_id(ctx, &to_channel).await? {
         let pins = ctx.channel_id().pins(ctx.http()).await?;
         for pin in pins {
-            to_id.say(&ctx.http(), &pin.content).await?;
-            pin.unpin(ctx.http()).await?
+            let bot_user = ctx.http().get_current_user().await?;
+            if &pin.author.name == &bot_user.name {
+                let mut embed = CreateEmbed::new()
+                    .title(&pin.author.name)
+                    .description(&pin.content)
+                    .url(pin.link());
+
+                let image_urls = extract_image_urls(&pin.content);
+
+                if image_urls.len() == 1 {
+                    embed = embed.image(image_urls[0]);
+                    ctx.defer().await?;
+                    to_id
+                        .send_message(&ctx.http(), CreateMessage::new().embed(embed))
+                        .await?;
+                } else {
+                    ctx.defer().await?;
+                    to_id
+                        .send_message(&ctx.http(), CreateMessage::new().embed(embed))
+                        .await?;
+
+                    for image_url in extract_image_urls(&pin.content) {
+                        ctx.defer().await?;
+                        to_id
+                            .send_message(
+                                &ctx.http(),
+                                CreateMessage::new().embed(CreateEmbed::new().image(image_url)),
+                            )
+                            .await?;
+                    }
+                }
+
+                pin.unpin(ctx.http()).await?;
+            }
         }
-        ctx.say(format!(
+        ctx.defer().await?;
+        ctx.send(CreateReply::default().content(format!(
             "Succesfully moved pins to channel **{}**.",
             to_channel
-        ))
+        )))
         .await?;
     } else {
         ctx.say(format!(

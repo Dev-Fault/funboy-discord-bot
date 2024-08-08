@@ -1,7 +1,10 @@
+use crate::{Context, Error};
+
 use super::*;
 use poise::CreateReply;
 
 const MAX_MESSAGE_SIZE: usize = 2000;
+const IMAGE_TYPES: [&str; 3] = [".png", ".gif", ".jpg"];
 
 pub trait MessageHelper {
     async fn say_vec(&self, message: Vec<String>, ephemeral: bool) -> Result<(), Error>;
@@ -186,6 +189,18 @@ pub fn format_output_vector(output: Vec<String>) -> Vec<String> {
             }
         })
         .collect()
+}
+
+pub fn extract_image_urls<'a>(input: &'a str) -> Vec<&'a str> {
+    let mut urls = Vec::new();
+    for word in input.split_whitespace() {
+        for image_type in IMAGE_TYPES {
+            if word.contains("https://") && word.contains(image_type) {
+                urls.push(word);
+            }
+        }
+    }
+    urls
 }
 
 #[cfg(test)]
