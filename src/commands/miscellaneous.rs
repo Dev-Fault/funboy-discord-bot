@@ -1,7 +1,8 @@
 use super::*;
+use io_util::vectorize_input;
 use poise::{
     samples::HelpConfiguration,
-    serenity_prelude::{self as serenity},
+    serenity_prelude::{self as serenity, ChannelId},
 };
 use rand::Rng;
 
@@ -28,6 +29,47 @@ pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
+/// Moves and unpins pinned messages to the selected channel
+///
+/// Example usage: **/move_pinned_messages** to_channel: **my-channel**
+#[poise::command(slash_command, prefix_command)]
+pub async fn move_pinned_messages(ctx: Context<'_>, to_channel: String) -> Result<(), Error> {
+    if let Some(to_id) = get_channel_id(ctx, &to_channel).await? {
+        let pins = ctx.channel_id().pins(ctx.http()).await?;
+        for pin in pins {
+            to_id.say(&ctx.http(), &pin.content).await?;
+            pin.unpin(ctx.http()).await?
+        }
+        ctx.say(format!(
+            "Succesfully moved pins to channel **{}**.",
+            to_channel
+        ))
+        .await?;
+    } else {
+        ctx.say(format!(
+            "Error: Could not find channel with name **{}**.",
+            to_channel
+        ))
+        .await?;
+    }
+    Ok(())
+}
+
+async fn get_channel_id(ctx: Context<'_>, channel_name: &str) -> Result<Option<ChannelId>, Error> {
+    match ctx.guild_id() {
+        Some(guild_id) => {
+            let guild = guild_id.to_partial_guild(ctx).await?;
+            for (channel_id, channel) in guild.channels(ctx).await?.iter() {
+                if channel.name() == channel_name {
+                    return Ok(Some(*channel_id));
+                }
+            }
+            return Ok(None);
+        }
+        None => Ok(None),
+    }
+}
+
 /// Displays the age of a users account.
 #[poise::command(slash_command, prefix_command)]
 pub async fn age(
@@ -41,9 +83,11 @@ pub async fn age(
 }
 
 /// Generates a random number between a minimum and maximum value.
+///
+/// Example usage: **/random_number** min: **1** max: **6**
 #[poise::command(slash_command, prefix_command)]
 pub async fn random_number(ctx: Context<'_>, min: String, max: String) -> Result<(), Error> {
-    match rng(min, max) {
+    match parse_and_get_random_i64(min, max) {
         Ok(result) => {
             ctx.say(result.to_string()).await?;
             Ok(())
@@ -55,12 +99,29 @@ pub async fn random_number(ctx: Context<'_>, min: String, max: String) -> Result
     }
 }
 
-fn rng(min: String, max: String) -> Result<i64, &'static str> {
+/// Selects a random word from a list of words.
+///
+/// Use quotes for multi-word terms like: "apple tree"
+///
+/// Example usage: **/random_word** words: **"apple tree" pear "orange tree" apricot**
+#[poise::command(slash_command, prefix_command)]
+pub async fn random_word(ctx: Context<'_>, words: String) -> Result<(), Error> {
+    let input = vectorize_input(&words);
+    if input.len() < 2 {
+        ctx.say(format!("Error: enter at least two entries."))
+            .await?;
+    } else {
+        let output = input[get_random_usize(0, input.len())];
+        ctx.say(output).await?;
+    }
+    Ok(())
+}
+
+fn parse_and_get_random_i64(min: String, max: String) -> Result<i64, &'static str> {
     match (min.parse(), max.parse()) {
         (Ok(min), Ok(max)) => {
-            let mut rng = rand::thread_rng();
             if min < max {
-                return Ok(rng.gen_range(min..=max));
+                return Ok(get_random_i64(min, max));
             } else {
                 return Err("minimum value must be less than maximum value");
             }
@@ -69,4 +130,14 @@ fn rng(min: String, max: String) -> Result<i64, &'static str> {
         (Err(_), Ok(_)) => Err("failed to convert min value to a number"),
         (Err(_), Err(_)) => Err("failed to convert min and max values to numbers"),
     }
+}
+
+fn get_random_i64(min: i64, max: i64) -> i64 {
+    let mut rng = rand::thread_rng();
+    rng.gen_range(min..=max)
+}
+
+fn get_random_usize(min: usize, max: usize) -> usize {
+    let mut rng = rand::thread_rng();
+    rng.gen_range(min..max)
 }

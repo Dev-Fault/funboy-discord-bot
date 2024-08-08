@@ -15,6 +15,8 @@ async fn main() {
                 commands::miscellaneous::help(),
                 commands::miscellaneous::register(),
                 commands::miscellaneous::random_number(),
+                commands::miscellaneous::random_word(),
+                commands::miscellaneous::move_pinned_messages(),
                 commands::miscellaneous::age(),
                 commands::text_gen::add(),
                 commands::text_gen::add_sub(),
