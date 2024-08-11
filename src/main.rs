@@ -1,4 +1,4 @@
-use poise::serenity_prelude::{self as serenity};
+use ::serenity::all::{ClientBuilder, FullEvent, GatewayIntents, Interaction};
 use reqwest::Client as HttpClient;
 use songbird::{typemap::TypeMapKey, SerenityInit};
 use template_substitution_database::TemplateDatabase;
@@ -6,12 +6,15 @@ use tokio::sync::Mutex;
 
 mod commands;
 
-pub struct Data {
-    pub t_db: Mutex<TemplateDatabase>,
-} // User data, which is stored and accessible in all command invocations
+use commands::sound::{TrackList, TRACK_BUTTON_ID};
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
+
+pub struct Data {
+    pub template_db: Mutex<TemplateDatabase>,
+    pub track_list: Mutex<TrackList>,
+} // User data, which is stored and accessible in all command invocations
 
 struct HttpKey;
 
@@ -19,11 +22,10 @@ impl TypeMapKey for HttpKey {
     type Value = HttpClient;
 }
 
-//test
 #[tokio::main]
 async fn main() {
     let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
-    let intents = serenity::GatewayIntents::non_privileged();
+    let intents = GatewayIntents::non_privileged();
 
     let framework = poise::Framework::builder()
         .options(poise::FrameworkOptions {
@@ -45,8 +47,35 @@ async fn main() {
                 commands::text_gen::list(),
                 commands::sound::join_voice(),
                 commands::sound::leave_voice(),
-                commands::sound::play_url(),
+                commands::sound::play_track(),
+                commands::sound::stop_tracks(),
+                commands::sound::list_tracks(),
             ],
+            event_handler: |ctx, event, framework_ctx, data| {
+                Box::pin(async move {
+                    match event {
+                        FullEvent::InteractionCreate { interaction } => match interaction {
+                            Interaction::Component(component_interaction) => {
+                                if component_interaction
+                                    .data
+                                    .custom_id
+                                    .starts_with(TRACK_BUTTON_ID)
+                                {
+                                    commands::sound::on_track_button_click(
+                                        ctx,
+                                        component_interaction,
+                                        data,
+                                    )
+                                    .await?;
+                                }
+                            }
+                            _ => {}
+                        },
+                        _ => {}
+                    }
+                    Ok(())
+                })
+            },
             ..Default::default()
         })
         .setup(|ctx, _ready, framework| {
@@ -54,19 +83,21 @@ async fn main() {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
 
                 Ok(Data {
-                    t_db: Mutex::new(
+                    template_db: Mutex::new(
                         TemplateDatabase::from_path("funboy.db")
                             .expect("Failed to load funboy database."),
                     ),
+                    track_list: Mutex::new(TrackList::new()).into(),
                 })
             })
         })
         .build();
 
-    let client = serenity::ClientBuilder::new(token, intents)
+    let client = ClientBuilder::new(token, intents)
         .framework(framework)
         .register_songbird()
         .type_map_insert::<HttpKey>(HttpClient::new())
         .await;
+
     client.unwrap().start().await.unwrap();
 }

@@ -24,7 +24,7 @@ pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Res
         return Ok(());
     }
 
-    let mut db = ctx.data().t_db.lock().await;
+    let mut db = ctx.data().template_db.lock().await;
 
     let subs_to_insert: Vec<&str> = vectorize_input(substitutes.as_str());
 
@@ -77,7 +77,7 @@ pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> 
         return Ok(());
     }
 
-    let mut db = ctx.data().t_db.lock().await;
+    let mut db = ctx.data().template_db.lock().await;
 
     match db.insert_sub(&template, &substitute) {
         Err(e) => {
@@ -119,7 +119,7 @@ pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> 
 /// Example usage: **/remove_template** template: **fruit**
 #[poise::command(slash_command, prefix_command)]
 pub async fn remove_template(ctx: Context<'_>, template: String) -> Result<(), Error> {
-    let mut db = ctx.data().t_db.lock().await;
+    let mut db = ctx.data().template_db.lock().await;
 
     match db.remove_template(&template) {
         Err(e) => match e {
@@ -163,7 +163,7 @@ pub async fn remove_sub(
     template: String,
     substitute: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().t_db.lock().await;
+    let mut db = ctx.data().template_db.lock().await;
 
     match db.remove_sub(&template, &substitute) {
         Err(e) => match e {
@@ -216,7 +216,7 @@ pub async fn remove_subs(
     template: String,
     substitutes: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().t_db.lock().await;
+    let mut db = ctx.data().template_db.lock().await;
 
     let subs_to_remove: Vec<&str> = vectorize_input(substitutes.as_str());
 
@@ -272,7 +272,7 @@ pub async fn replace_sub(
     old_sub: String,
     new_sub: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().t_db.lock().await;
+    let mut db = ctx.data().template_db.lock().await;
 
     match db.rename_substitute(&template, &old_sub, &new_sub) {
         Err(e) => match e {
@@ -326,7 +326,7 @@ pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Resu
         return Ok(());
     }
 
-    let mut db = ctx.data().t_db.lock().await;
+    let mut db = ctx.data().template_db.lock().await;
 
     match db.rename_template(&from, &to) {
         Err(e) => {
@@ -357,7 +357,7 @@ pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Resu
 /// Example usage: **/list** template: **fruit**
 #[poise::command(slash_command, prefix_command)]
 pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Error> {
-    let db = ctx.data().t_db.lock().await;
+    let db = ctx.data().template_db.lock().await;
 
     match template {
         Some(tmp) => match db.get_subs(&tmp) {
@@ -413,7 +413,7 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
 /// Example output: **I love apples!**
 #[poise::command(slash_command, prefix_command)]
 pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
-    let db = ctx.data().t_db.lock().await;
+    let db = ctx.data().template_db.lock().await;
     let mut interpolator = TextInterpolator::default();
 
     let output = interpolator.interp(&text, &|template| match db.get_random_subs(template) {
