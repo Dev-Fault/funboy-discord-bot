@@ -1,7 +1,7 @@
 use crate::{Context, Error};
 
 use super::*;
-use io_util::{extract_image_urls, vectorize_input, MessageHelper};
+use io_util::{extract_image_urls, vectorize_input, ContextExtension};
 use poise::{
     samples::HelpConfiguration,
     serenity_prelude::{self as serenity, ChannelId, CreateEmbed, CreateMessage},

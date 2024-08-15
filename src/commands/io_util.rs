@@ -10,7 +10,7 @@ use tokio::task;
 const MAX_MESSAGE_SIZE: usize = 2000;
 const IMAGE_TYPES: [&str; 3] = [".png", ".gif", ".jpg"];
 
-pub trait MessageHelper {
+pub trait ContextExtension {
     async fn say_vec(&self, message: Vec<String>, ephemeral: bool) -> Result<(), Error>;
 
     async fn say_ephemeral(&self, message: &str) -> Result<(), Error>;
@@ -18,7 +18,7 @@ pub trait MessageHelper {
     async fn multi_say(&self, message: &str, ephemeral: bool) -> Result<(), Error>;
 }
 
-impl<'a> MessageHelper for Context<'a> {
+impl<'a> ContextExtension for Context<'a> {
     async fn say_vec(&self, message: Vec<String>, ephemeral: bool) -> Result<(), Error> {
         for split_message in split_message(&format_output_vector(message)) {
             self.defer_ephemeral().await?;

@@ -2,7 +2,7 @@ use super::*;
 use std::sync::Arc;
 
 use crate::{Data, HttpClient};
-use io_util::MessageHelper;
+use io_util::ContextExtension;
 use poise::{serenity_prelude::async_trait, CreateReply};
 use serenity::all::{
     CacheHttp, ComponentInteraction, CreateActionRow, CreateButton, CreateInteractionResponse,
@@ -12,7 +12,7 @@ use songbird::{
     events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent},
     input::YoutubeDl,
     tracks::TrackHandle,
-    Songbird,
+    CoreEvent, Songbird,
 };
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -22,16 +22,10 @@ use crate::{Context, Error, HttpKey};
 const NOT_INITIALIZED: &str = "Songbird Voice client placed in at initialisation.";
 const NOT_IN_VOICE_CHANNEL: &str = "Not in a voice channel.";
 pub const TRACK_BUTTON_ID: &str = "track";
-pub const TRACK_OPTIONS: [&str; 3] = ["Play", "Pause", "Stop"];
-
-pub enum TrackOption {
-    Play,
-    Pause,
-    Stop,
-    Back,
-    Forward,
-    Loop,
-}
+pub const TRACK_OPTIONS: [&str; 3] = [PLAY, PAUSE, STOP];
+const PLAY: &str = "Play";
+const PAUSE: &str = "Pause";
+const STOP: &str = "Stop";
 
 #[derive(Debug)]
 pub struct Track {
@@ -40,6 +34,26 @@ pub struct Track {
 }
 
 type TrackMap = HashMap<Uuid, Track>;
+
+#[derive(Debug)]
+pub struct TrackEndHandler {
+    track_list: Arc<Mutex<TrackList>>,
+}
+
+#[async_trait]
+impl songbird::EventHandler for TrackEndHandler {
+    async fn act(&self, ctx: &EventContext<'_>) -> Option<Event> {
+        if let EventContext::Track(track_list) = ctx {
+            for (_, handle) in *track_list {
+                self.track_list.lock().await.remove_track(&handle.uuid());
+            }
+        } else if let EventContext::DriverDisconnect(_) = ctx {
+            self.track_list.lock().await.clear();
+        }
+
+        None
+    }
+}
 
 #[derive(Debug)]
 pub struct TrackList {
@@ -53,18 +67,30 @@ impl TrackList {
         }
     }
 
-    pub async fn add_track(&mut self, track: Track) {
-        self.clean().await;
+    pub fn add_track(&mut self, track: Track) {
         self.track_map.insert(track.handle.uuid(), track);
+        dbg!("Adding track:\n");
+        dbg!(&self);
     }
 
-    pub async fn get_tracks(&mut self) -> Vec<&mut Track> {
-        self.clean().await;
+    pub fn remove_track(&mut self, track_id: &Uuid) {
+        let track = self.track_map.remove(&track_id);
+        if let Some(track) = track {
+            let _ = track.handle.stop();
+        }
+        dbg!("Removing track:\n");
+        dbg!(&self);
+    }
+
+    pub fn get_tracks(&mut self) -> Arc<[&mut Track]> {
+        dbg!("Getting tracks:\n");
+        dbg!(&self);
         self.track_map.values_mut().collect()
     }
 
-    pub async fn get_track(&mut self, id: &str) -> Option<&mut Track> {
-        self.clean().await;
+    pub fn get_track(&mut self, id: &str) -> Option<&mut Track> {
+        dbg!("Getting track:\n");
+        dbg!(&self);
         for (uuid, track) in &mut self.track_map {
             if uuid.to_string().eq(id) {
                 return Some(track);
@@ -74,26 +100,19 @@ impl TrackList {
     }
 
     pub fn clear(&mut self) {
+        for track in self.track_map.values() {
+            let _ = track.handle.stop();
+        }
         self.track_map.clear();
+        dbg!("Clearing:\n");
+        dbg!(&self);
     }
+}
 
-    async fn clean(&mut self) {
-        let mut tracks_to_clean = Vec::new();
-        for (_, track) in &self.track_map {
-            if let Ok(info) = track.handle.get_info().await {
-                match info.playing {
-                    songbird::tracks::PlayMode::Play => {}
-                    songbird::tracks::PlayMode::Pause => {}
-                    _ => tracks_to_clean.push(track.handle.uuid()),
-                }
-            } else {
-                tracks_to_clean.push(track.handle.uuid());
-            }
-        }
-
-        for track in tracks_to_clean {
-            self.track_map.remove(&track);
-        }
+impl Drop for TrackList {
+    fn drop(&mut self) {
+        dbg!("Dropping:\n");
+        dbg!(&self);
     }
 }
 
@@ -146,7 +165,14 @@ pub async fn join_voice(ctx: Context<'_>) -> Result<(), Error> {
     if let Ok(handler_lock) = manager.join(guild_id, connect_to).await {
         // Attach an event handler to see notifications of all track errors.
         let mut handler = handler_lock.lock().await;
+
         handler.add_global_event(TrackEvent::Error.into(), TrackErrorNotifier);
+        handler.add_global_event(
+            CoreEvent::DriverDisconnect.into(),
+            TrackEndHandler {
+                track_list: ctx.data().track_list.clone(),
+            },
+        );
 
         ctx.say("Joined voice channel.").await?;
     }
@@ -157,8 +183,6 @@ pub async fn join_voice(ctx: Context<'_>) -> Result<(), Error> {
 // Disconnects bot from voice channel
 #[poise::command(slash_command, prefix_command)]
 pub async fn leave_voice(ctx: Context<'_>) -> Result<(), Error> {
-    ctx.data().track_list.lock().await.clear();
-
     let guild_id = ctx.guild_id().unwrap();
 
     let manager = get_songbird_manager(ctx).await;
@@ -199,15 +223,25 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
         };
 
         let track_handle = handler.play_input(src.clone().into());
-        ctx.data()
-            .track_list
-            .lock()
-            .await
-            .add_track(Track {
-                name: url_or_query.clone(),
-                handle: track_handle,
-            })
-            .await;
+
+        let _ = track_handle.add_event(
+            TrackEvent::End.into(),
+            TrackEndHandler {
+                track_list: ctx.data().track_list.clone(),
+            },
+        );
+
+        let _ = track_handle.add_event(
+            TrackEvent::Error.into(),
+            TrackEndHandler {
+                track_list: ctx.data().track_list.clone(),
+            },
+        );
+
+        ctx.data().track_list.lock().await.add_track(Track {
+            name: url_or_query.clone(),
+            handle: track_handle,
+        });
 
         ctx.say(format!("Playing track **{}**", &url_or_query))
             .await?;
@@ -256,15 +290,15 @@ pub async fn on_track_button_click(
         .nth(2)
         .unwrap();
 
-    if let Some(track) = data.track_list.lock().await.get_track(track_id).await {
+    if let Some(track) = data.track_list.lock().await.get_track(track_id) {
         match option {
-            "Play" => {
+            PLAY => {
                 let _ = track.handle.play();
             }
-            "Pause" => {
+            PAUSE => {
                 let _ = track.handle.pause();
             }
-            "Stop" => {
+            STOP => {
                 let _ = track.handle.stop();
             }
             _ => {}
@@ -278,7 +312,7 @@ pub async fn on_track_button_click(
                 ctx.http(),
                 CreateInteractionResponse::Message(
                     CreateInteractionResponseMessage::new()
-                        .content("Error: Couldn't find track.")
+                        .content("Error: Track no longer exists.")
                         .ephemeral(true),
                 ),
             )
@@ -297,7 +331,7 @@ pub async fn list_tracks(ctx: Context<'_>) -> Result<(), Error> {
         let mut _handler = handler_lock.lock().await;
 
         let mut track_list = ctx.data().track_list.lock().await;
-        let tracks = track_list.get_tracks().await;
+        let tracks = track_list.get_tracks();
 
         if tracks.len() == 0 {
             ctx.say_ephemeral("No tracks are currently playing.")
@@ -305,7 +339,7 @@ pub async fn list_tracks(ctx: Context<'_>) -> Result<(), Error> {
             return Ok(());
         }
 
-        for track in &tracks {
+        for track in tracks.iter() {
             let mut buttons = Vec::new();
             for option in TRACK_OPTIONS {
                 buttons.push(

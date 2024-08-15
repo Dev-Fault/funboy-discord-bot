@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use ::serenity::all::{ClientBuilder, FullEvent, GatewayIntents, Interaction};
 use reqwest::Client as HttpClient;
 use songbird::{typemap::TypeMapKey, SerenityInit};
@@ -13,7 +15,7 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 
 pub struct Data {
     pub template_db: Mutex<TemplateDatabase>,
-    pub track_list: Mutex<TrackList>,
+    pub track_list: Arc<Mutex<TrackList>>,
 } // User data, which is stored and accessible in all command invocations
 
 struct HttpKey;
@@ -54,23 +56,22 @@ async fn main() {
             event_handler: |ctx, event, framework_ctx, data| {
                 Box::pin(async move {
                     match event {
-                        FullEvent::InteractionCreate { interaction } => match interaction {
-                            Interaction::Component(component_interaction) => {
-                                if component_interaction
-                                    .data
-                                    .custom_id
-                                    .starts_with(TRACK_BUTTON_ID)
-                                {
-                                    commands::sound::on_track_button_click(
-                                        ctx,
-                                        component_interaction,
-                                        data,
-                                    )
-                                    .await?;
-                                }
+                        FullEvent::InteractionCreate {
+                            interaction: Interaction::Component(component_interaction),
+                        } => {
+                            if component_interaction
+                                .data
+                                .custom_id
+                                .starts_with(TRACK_BUTTON_ID)
+                            {
+                                commands::sound::on_track_button_click(
+                                    ctx,
+                                    component_interaction,
+                                    data,
+                                )
+                                .await?;
                             }
-                            _ => {}
-                        },
+                        }
                         _ => {}
                     }
                     Ok(())
