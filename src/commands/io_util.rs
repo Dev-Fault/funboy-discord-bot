@@ -1,11 +1,6 @@
-use std::sync::Arc;
-
 use crate::{Context, Error};
 
-use super::*;
 use poise::CreateReply;
-use serenity::http;
-use tokio::task;
 
 const MAX_MESSAGE_SIZE: usize = 2000;
 const IMAGE_TYPES: [&str; 3] = [".png", ".gif", ".jpg"];

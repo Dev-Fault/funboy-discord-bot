@@ -1,5 +1,5 @@
 use super::*;
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use crate::{Data, HttpClient};
 use io_util::ContextExtension;
@@ -10,30 +10,83 @@ use serenity::all::{
 };
 use songbird::{
     events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent},
-    input::YoutubeDl,
+    input::{Compose, YoutubeDl},
     tracks::TrackHandle,
     CoreEvent, Songbird,
 };
 use std::collections::HashMap;
+use tokio::sync::Mutex;
 use uuid::Uuid;
 
 use crate::{Context, Error, HttpKey};
 
 const NOT_INITIALIZED: &str = "Songbird Voice client placed in at initialisation.";
 const NOT_IN_VOICE_CHANNEL: &str = "Not in a voice channel.";
-pub const TRACK_BUTTON_ID: &str = "track";
-pub const TRACK_OPTIONS: [&str; 3] = [PLAY, PAUSE, STOP];
-const PLAY: &str = "Play";
-const PAUSE: &str = "Pause";
-const STOP: &str = "Stop";
+const JOINED_CHANNEL_NOTIF: &str = "Joined voice channel.";
+const LEFT_CHANNEL_NOTIF: &str = "Left voice channel.";
+const STOP_AUDIO_NOTIF: &str = "Stopping all audio.";
+const NON_EXISTANT_TRACK_ERROR: &str = "Error: Track no longer exists.";
+const NO_TRACKS_PLAYING_NOTIF: &str = "No tracks are currently playing.";
 
+pub const TRACK_BUTTON_ID: &str = "track";
+pub const PLAY_PAUSE: &str = "Play/Pause";
+pub const STOP: &str = "Stop";
+pub const LOOP: &str = "Loop";
+pub const TRACK_OPTIONS: [&str; 3] = [PLAY_PAUSE, STOP, LOOP];
+
+#[allow(dead_code)]
 #[derive(Debug)]
 pub struct Track {
-    pub name: String,
-    pub handle: TrackHandle,
+    name: String,
+    handle: TrackHandle,
+    duration: Duration,
 }
 
 type TrackMap = HashMap<Uuid, Track>;
+
+#[derive(Debug)]
+pub struct TrackList {
+    track_map: TrackMap,
+}
+
+impl TrackList {
+    pub fn new() -> Self {
+        TrackList {
+            track_map: TrackMap::new(),
+        }
+    }
+
+    pub fn add_track(&mut self, track: Track) {
+        self.track_map.insert(track.handle.uuid(), track);
+    }
+
+    pub fn remove_track(&mut self, track_id: &Uuid) {
+        let track = self.track_map.remove(&track_id);
+        if let Some(track) = track {
+            let _ = track.handle.stop();
+        }
+    }
+
+    pub fn get_tracks(&mut self) -> Arc<[&mut Track]> {
+        self.track_map.values_mut().collect()
+    }
+
+    pub fn get_track(&mut self, id: &str) -> Option<&mut Track> {
+        for (uuid, track) in &mut self.track_map {
+            if uuid.to_string().eq(id) {
+                return Some(track);
+            }
+        }
+        None
+    }
+
+    pub fn clear(&mut self) {
+        for track in self.track_map.values() {
+            let _ = track.handle.stop();
+        }
+        self.track_map.clear();
+    }
+}
 
 #[derive(Debug)]
 pub struct TrackEndHandler {
@@ -52,67 +105,6 @@ impl songbird::EventHandler for TrackEndHandler {
         }
 
         None
-    }
-}
-
-#[derive(Debug)]
-pub struct TrackList {
-    track_map: TrackMap,
-}
-
-impl TrackList {
-    pub fn new() -> Self {
-        TrackList {
-            track_map: TrackMap::new(),
-        }
-    }
-
-    pub fn add_track(&mut self, track: Track) {
-        self.track_map.insert(track.handle.uuid(), track);
-        dbg!("Adding track:\n");
-        dbg!(&self);
-    }
-
-    pub fn remove_track(&mut self, track_id: &Uuid) {
-        let track = self.track_map.remove(&track_id);
-        if let Some(track) = track {
-            let _ = track.handle.stop();
-        }
-        dbg!("Removing track:\n");
-        dbg!(&self);
-    }
-
-    pub fn get_tracks(&mut self) -> Arc<[&mut Track]> {
-        dbg!("Getting tracks:\n");
-        dbg!(&self);
-        self.track_map.values_mut().collect()
-    }
-
-    pub fn get_track(&mut self, id: &str) -> Option<&mut Track> {
-        dbg!("Getting track:\n");
-        dbg!(&self);
-        for (uuid, track) in &mut self.track_map {
-            if uuid.to_string().eq(id) {
-                return Some(track);
-            }
-        }
-        None
-    }
-
-    pub fn clear(&mut self) {
-        for track in self.track_map.values() {
-            let _ = track.handle.stop();
-        }
-        self.track_map.clear();
-        dbg!("Clearing:\n");
-        dbg!(&self);
-    }
-}
-
-impl Drop for TrackList {
-    fn drop(&mut self) {
-        dbg!("Dropping:\n");
-        dbg!(&self);
     }
 }
 
@@ -135,7 +127,39 @@ impl VoiceEventHandler for TrackErrorNotifier {
     }
 }
 
-// Joins bot to current voice channel
+pub struct TrackComponent {
+    interaction: ComponentInteraction,
+    track_id: String,
+    track_command: String,
+}
+
+impl TrackComponent {
+    pub fn new(component_interaction: ComponentInteraction) -> Self {
+        let track_id = component_interaction
+            .data
+            .custom_id
+            .split_whitespace()
+            .nth(1)
+            .expect("Track button id should contain track id.")
+            .to_string();
+
+        let track_command = component_interaction
+            .data
+            .custom_id
+            .split_whitespace()
+            .nth(2)
+            .expect("Track button id should contain track command.")
+            .to_string();
+
+        TrackComponent {
+            interaction: component_interaction,
+            track_id,
+            track_command,
+        }
+    }
+}
+
+/// Joins bot to current voice channel
 #[poise::command(slash_command, prefix_command)]
 pub async fn join_voice(ctx: Context<'_>) -> Result<(), Error> {
     let (guild_id, channel_id) = {
@@ -163,7 +187,6 @@ pub async fn join_voice(ctx: Context<'_>) -> Result<(), Error> {
         .clone();
 
     if let Ok(handler_lock) = manager.join(guild_id, connect_to).await {
-        // Attach an event handler to see notifications of all track errors.
         let mut handler = handler_lock.lock().await;
 
         handler.add_global_event(TrackEvent::Error.into(), TrackErrorNotifier);
@@ -174,13 +197,13 @@ pub async fn join_voice(ctx: Context<'_>) -> Result<(), Error> {
             },
         );
 
-        ctx.say("Joined voice channel.").await?;
+        ctx.say(JOINED_CHANNEL_NOTIF).await?;
     }
 
     Ok(())
 }
 
-// Disconnects bot from voice channel
+/// Disconnects bot from voice channel
 #[poise::command(slash_command, prefix_command)]
 pub async fn leave_voice(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap();
@@ -194,7 +217,7 @@ pub async fn leave_voice(ctx: Context<'_>) -> Result<(), Error> {
             ctx.say(format!("Failed: {:?}", e)).await?;
         }
 
-        ctx.say("Left voice channel.").await?;
+        ctx.say(LEFT_CHANNEL_NOTIF).await?;
     } else {
         ctx.say(NOT_IN_VOICE_CHANNEL).await?;
     }
@@ -202,9 +225,10 @@ pub async fn leave_voice(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-// Plays audio track from url or search query
-//
-// Example usage: **/play_track** url_or_query: **https://www.youtube.com/watch?v=a3mxLL7nX1E**
+/// Plays audio track from url or search query
+///
+/// Example usage: **/play_track** url_or_query: **https://www.youtube.com/watch?v=a3mxLL7nX1E**
+/// Example usage: **/play_track** url_or_query: **Back In Black**
 #[poise::command(slash_command, prefix_command)]
 pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Error> {
     let is_url = !url_or_query.starts_with("http");
@@ -214,13 +238,20 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
     let manager = get_songbird_manager(ctx).await;
 
     if let Some(handler_lock) = manager.get(ctx.guild_id().unwrap()) {
+        ctx.defer().await?;
+
         let mut handler = handler_lock.lock().await;
 
-        let src = if is_url {
+        let mut src = if is_url {
             YoutubeDl::new_search(http_client, url_or_query.clone())
         } else {
             YoutubeDl::new(http_client, url_or_query.clone())
         };
+
+        let metadata = src.aux_metadata().await?;
+
+        let track_duration = metadata.duration.unwrap_or(Duration::from_secs(0));
+        let track_name = metadata.title.unwrap_or(url_or_query.clone());
 
         let track_handle = handler.play_input(src.clone().into());
 
@@ -239,11 +270,12 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
         );
 
         ctx.data().track_list.lock().await.add_track(Track {
-            name: url_or_query.clone(),
+            name: track_name,
             handle: track_handle,
+            duration: track_duration,
         });
 
-        ctx.say(format!("Playing track **{}**", &url_or_query))
+        ctx.send(CreateReply::default().content(format!("Playing track **{}**", &url_or_query)))
             .await?;
     } else {
         ctx.say(NOT_IN_VOICE_CHANNEL).await?;
@@ -252,7 +284,7 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
     Ok(())
 }
 
-// Stops all currently playing audio tracks
+/// Stops all currently playing audio tracks
 #[poise::command(slash_command, prefix_command)]
 pub async fn stop_tracks(ctx: Context<'_>) -> Result<(), Error> {
     ctx.data().track_list.lock().await.clear();
@@ -263,7 +295,7 @@ pub async fn stop_tracks(ctx: Context<'_>) -> Result<(), Error> {
         let mut handler = handler_lock.lock().await;
         handler.stop();
 
-        ctx.say("Stopping all audio.").await?;
+        ctx.say(STOP_AUDIO_NOTIF).await?;
     } else {
         ctx.say(NOT_IN_VOICE_CHANNEL).await?;
     }
@@ -271,58 +303,7 @@ pub async fn stop_tracks(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-pub async fn on_track_button_click(
-    ctx: &poise::serenity_prelude::Context,
-    component_interaction: &ComponentInteraction,
-    data: &Data,
-) -> Result<(), Error> {
-    let track_id = component_interaction
-        .data
-        .custom_id
-        .split_whitespace()
-        .nth(1)
-        .unwrap();
-
-    let option = component_interaction
-        .data
-        .custom_id
-        .split_whitespace()
-        .nth(2)
-        .unwrap();
-
-    if let Some(track) = data.track_list.lock().await.get_track(track_id) {
-        match option {
-            PLAY => {
-                let _ = track.handle.play();
-            }
-            PAUSE => {
-                let _ = track.handle.pause();
-            }
-            STOP => {
-                let _ = track.handle.stop();
-            }
-            _ => {}
-        }
-        component_interaction
-            .create_response(ctx.http(), CreateInteractionResponse::Acknowledge)
-            .await?;
-    } else {
-        component_interaction
-            .create_response(
-                ctx.http(),
-                CreateInteractionResponse::Message(
-                    CreateInteractionResponseMessage::new()
-                        .content("Error: Track no longer exists.")
-                        .ephemeral(true),
-                ),
-            )
-            .await?;
-    }
-
-    Ok(())
-}
-
-// Lists currently playing audio tracks
+/// Lists currently playing audio tracks
 #[poise::command(slash_command, prefix_command)]
 pub async fn list_tracks(ctx: Context<'_>) -> Result<(), Error> {
     let manager = get_songbird_manager(ctx).await;
@@ -334,8 +315,7 @@ pub async fn list_tracks(ctx: Context<'_>) -> Result<(), Error> {
         let tracks = track_list.get_tracks();
 
         if tracks.len() == 0 {
-            ctx.say_ephemeral("No tracks are currently playing.")
-                .await?;
+            ctx.say_ephemeral(NO_TRACKS_PLAYING_NOTIF).await?;
             return Ok(());
         }
 
@@ -354,7 +334,7 @@ pub async fn list_tracks(ctx: Context<'_>) -> Result<(), Error> {
             }
             ctx.send(
                 CreateReply::default()
-                    .content(format!("Track: **{}**", &track.name))
+                    .content(format!("Track: **{}**", &track.name,))
                     .ephemeral(true)
                     .components(vec![CreateActionRow::Buttons(buttons)]),
             )
@@ -362,6 +342,64 @@ pub async fn list_tracks(ctx: Context<'_>) -> Result<(), Error> {
         }
     } else {
         ctx.say(NOT_IN_VOICE_CHANNEL).await?;
+    }
+
+    Ok(())
+}
+
+pub async fn on_track_button_click(
+    ctx: &poise::serenity_prelude::Context,
+    track_component: TrackComponent,
+    data: &Data,
+) -> Result<(), Error> {
+    if let Some(track) = data
+        .track_list
+        .lock()
+        .await
+        .get_track(&track_component.track_id)
+    {
+        if let Ok(track_state) = track.handle.get_info().await {
+            match &track_component.track_command[..] {
+                PLAY_PAUSE => match track_state.playing {
+                    songbird::tracks::PlayMode::Play => {
+                        let _ = track.handle.pause();
+                    }
+                    songbird::tracks::PlayMode::Pause => {
+                        let _ = track.handle.play();
+                    }
+                    _ => {}
+                },
+                STOP => {
+                    let _ = track.handle.stop();
+                }
+                LOOP => match track_state.loops {
+                    songbird::tracks::LoopState::Infinite => {
+                        let _ = track.handle.disable_loop();
+                    }
+                    songbird::tracks::LoopState::Finite(_) => {
+                        let _ = track.handle.enable_loop();
+                    }
+                },
+                _ => {}
+            }
+        }
+
+        track_component
+            .interaction
+            .create_response(ctx.http(), CreateInteractionResponse::Acknowledge)
+            .await?;
+    } else {
+        track_component
+            .interaction
+            .create_response(
+                ctx.http(),
+                CreateInteractionResponse::Message(
+                    CreateInteractionResponseMessage::new()
+                        .content(NON_EXISTANT_TRACK_ERROR)
+                        .ephemeral(true),
+                ),
+            )
+            .await?;
     }
 
     Ok(())

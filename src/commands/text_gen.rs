@@ -7,6 +7,10 @@ use text_interpolator::TextInterpolator;
 use io_util::*;
 
 const TEMPLATE_NAME_ERROR: &str = "Error: templates may only contain letters and numbers.";
+const NO_TEMPLATE_ERROR: &str =
+    "Error: There are currently no templates. Try creaing some with /add";
+const DB_ERROR: &str = "Error: There was a problem querying the database.";
+const GENERATION_FAILED_ERROR: &str = "Error: Text generation failed.";
 
 /// Adds multiple substitutes to a template.
 ///
@@ -384,17 +388,13 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
         None => match db.get_templates() {
             Ok(tmps) => {
                 if tmps.is_empty() {
-                    ctx.say_ephemeral(
-                        "There are currently no templates. Try creaing some with /add",
-                    )
-                    .await?;
+                    ctx.say_ephemeral(NO_TEMPLATE_ERROR).await?;
                 } else {
                     ctx.say_vec(tmps, true).await?;
                 }
             }
             _ => {
-                ctx.say_ephemeral("Error: Couldn't get any templates.")
-                    .await?;
+                ctx.say_ephemeral(DB_ERROR).await?;
             }
         },
     }
@@ -425,8 +425,8 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
         Ok(o) => {
             ctx.multi_say(&o, false).await?;
         }
-        Err(e) => {
-            ctx.say(format!("Error: {e}")).await?;
+        Err(_) => {
+            ctx.say(GENERATION_FAILED_ERROR).await?;
         }
     }
 

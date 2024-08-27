@@ -1,19 +1,18 @@
 use crate::{Context, Error};
 
 use super::*;
-use io_util::{extract_image_urls, vectorize_input, ContextExtension};
+use io_util;
 use poise::{
     samples::HelpConfiguration,
     serenity_prelude::{self as serenity, ChannelId, CreateEmbed, CreateMessage},
     CreateReply,
 };
-use rand::Rng;
 
 /// Displays help information for commands
 #[poise::command(slash_command, prefix_command)]
 pub async fn help(ctx: Context<'_>, command: Option<String>) -> Result<(), Error> {
     let bottom_text = "\
-    Type '/help name_of_command' for more info on a specific command.";
+    Type \"/help name_of_command\" for more info on a specific command.";
 
     let config = HelpConfiguration {
         show_subcommands: false,
@@ -47,7 +46,7 @@ pub async fn move_bot_pins(ctx: Context<'_>, to_channel: String) -> Result<(), E
                     .description(&pin.content)
                     .url(pin.link());
 
-                let image_urls = extract_image_urls(&pin.content);
+                let image_urls = io_util::extract_image_urls(&pin.content);
 
                 if image_urls.len() == 1 {
                     embed = embed.image(image_urls[0]);
@@ -61,7 +60,7 @@ pub async fn move_bot_pins(ctx: Context<'_>, to_channel: String) -> Result<(), E
                         .send_message(&ctx.http(), CreateMessage::new().embed(embed))
                         .await?;
 
-                    for image_url in extract_image_urls(&pin.content) {
+                    for image_url in io_util::extract_image_urls(&pin.content) {
                         ctx.defer().await?;
                         to_id
                             .send_message(
@@ -116,64 +115,4 @@ pub async fn age(
     let response = format!("{}'s account was created at {}.", u.name, u.created_at());
     ctx.say(response).await?;
     Ok(())
-}
-
-/// Generates a random number between a minimum and maximum value.
-///
-/// Example usage: **/random_number** min: **1** max: **6**
-#[poise::command(slash_command, prefix_command)]
-pub async fn random_number(ctx: Context<'_>, min: String, max: String) -> Result<(), Error> {
-    match parse_and_get_random_i64(min, max) {
-        Ok(result) => {
-            ctx.say(result.to_string()).await?;
-            Ok(())
-        }
-        Err(e) => {
-            ctx.say(format!("Error: {}.", e)).await?;
-            Ok(())
-        }
-    }
-}
-
-/// Selects a random word from a list of words.
-///
-/// Use quotes for multi-word terms like: "apple tree"
-///
-/// Example usage: **/random_word** words: **"apple tree" pear "orange tree" apricot**
-#[poise::command(slash_command, prefix_command)]
-pub async fn random_word(ctx: Context<'_>, words: String) -> Result<(), Error> {
-    let input = vectorize_input(&words);
-    if input.len() < 2 {
-        ctx.say(format!("Error: enter at least two entries."))
-            .await?;
-    } else {
-        let output = input[get_random_usize(0, input.len())];
-        ctx.say(output).await?;
-    }
-    Ok(())
-}
-
-fn parse_and_get_random_i64(min: String, max: String) -> Result<i64, &'static str> {
-    match (min.parse(), max.parse()) {
-        (Ok(min), Ok(max)) => {
-            if min < max {
-                return Ok(get_random_i64(min, max));
-            } else {
-                return Err("minimum value must be less than maximum value");
-            }
-        }
-        (Ok(_), Err(_)) => Err("failed to convert max value to a number"),
-        (Err(_), Ok(_)) => Err("failed to convert min value to a number"),
-        (Err(_), Err(_)) => Err("failed to convert min and max values to numbers"),
-    }
-}
-
-fn get_random_i64(min: i64, max: i64) -> i64 {
-    let mut rng = rand::thread_rng();
-    rng.gen_range(min..=max)
-}
-
-fn get_random_usize(min: usize, max: usize) -> usize {
-    let mut rng = rand::thread_rng();
-    rng.gen_range(min..max)
 }
