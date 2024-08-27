@@ -73,9 +73,7 @@ async fn main() {
                                 )
                                 .await?;
                             }
-                            CustomComponent::Invalid => {
-                                panic!("Custom component should never be invalid.")
-                            }
+                            CustomComponent::Invalid => {}
                         },
                         _ => {}
                     }
