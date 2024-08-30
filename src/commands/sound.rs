@@ -6,12 +6,12 @@ use io_util::ContextExtension;
 use poise::{serenity_prelude::async_trait, CreateReply};
 use serenity::all::{
     CacheHttp, ComponentInteraction, CreateActionRow, CreateButton, CreateInteractionResponse,
-    CreateInteractionResponseMessage,
+    CreateInteractionResponseMessage, EditInteractionResponse,
 };
 use songbird::{
     events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent},
     input::{Compose, YoutubeDl},
-    tracks::TrackHandle,
+    tracks::{LoopState, PlayMode, TrackHandle},
     CoreEvent, Songbird,
 };
 use std::collections::HashMap;
@@ -31,8 +31,10 @@ const NO_TRACKS_PLAYING_NOTIF: &str = "No tracks are currently playing.";
 pub const TRACK_BUTTON_ID: &str = "track";
 pub const PLAY_PAUSE: &str = "Play/Pause";
 pub const STOP: &str = "Stop";
+pub const VOLUME_UP: &str = "Volume_Up";
+pub const VOLUME_DOWN: &str = "Volume_Down";
 pub const LOOP: &str = "Loop";
-pub const TRACK_OPTIONS: [&str; 3] = [PLAY_PAUSE, STOP, LOOP];
+pub const TRACK_COMMANDS: [&str; 5] = [PLAY_PAUSE, STOP, VOLUME_UP, VOLUME_DOWN, LOOP];
 
 #[allow(dead_code)]
 #[derive(Debug)]
@@ -40,6 +42,23 @@ pub struct Track {
     name: String,
     handle: TrackHandle,
     duration: Duration,
+}
+
+impl Track {
+    pub async fn get_description(&self) -> String {
+        let track_status;
+        if let Ok(status) = self.handle.get_info().await {
+            track_status = format!(
+                "Playing: **{}** Volume: **{} / 1** Looping: **{}**",
+                status.playing == PlayMode::Play,
+                status.volume,
+                status.loops == LoopState::Infinite
+            );
+        } else {
+            track_status = "This track has been stopped and can no longer be played.".to_string();
+        }
+        format!("Track: **{}** \n{}", &self.name, track_status)
+    }
 }
 
 type TrackMap = HashMap<Uuid, Track>;
@@ -321,20 +340,21 @@ pub async fn list_tracks(ctx: Context<'_>) -> Result<(), Error> {
 
         for track in tracks.iter() {
             let mut buttons = Vec::new();
-            for option in TRACK_OPTIONS {
+            for command in TRACK_COMMANDS {
                 buttons.push(
                     CreateButton::new(format!(
                         "{} {} {}",
                         TRACK_BUTTON_ID,
                         &track.handle.uuid(),
-                        option
+                        command
                     ))
-                    .label(option),
+                    .label(command.replace("_", " ")),
                 );
             }
+
             ctx.send(
                 CreateReply::default()
-                    .content(format!("Track: **{}**", &track.name,))
+                    .content(track.get_description().await)
                     .ephemeral(true)
                     .components(vec![CreateActionRow::Buttons(buttons)]),
             )
@@ -372,6 +392,18 @@ pub async fn on_track_button_click(
                 STOP => {
                     let _ = track.handle.stop();
                 }
+                VOLUME_UP => {
+                    let new_volume = track_state.volume + 0.25;
+                    if new_volume <= 1.0 {
+                        let _ = track.handle.set_volume(new_volume);
+                    }
+                }
+                VOLUME_DOWN => {
+                    let new_volume = track_state.volume - 0.25;
+                    if new_volume >= 0.0 {
+                        let _ = track.handle.set_volume(new_volume);
+                    }
+                }
                 LOOP => match track_state.loops {
                     songbird::tracks::LoopState::Infinite => {
                         let _ = track.handle.disable_loop();
@@ -387,6 +419,14 @@ pub async fn on_track_button_click(
         track_component
             .interaction
             .create_response(ctx.http(), CreateInteractionResponse::Acknowledge)
+            .await?;
+
+        track_component
+            .interaction
+            .edit_response(
+                ctx.http(),
+                EditInteractionResponse::default().content(track.get_description().await),
+            )
             .await?;
     } else {
         track_component
