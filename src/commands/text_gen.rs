@@ -1,10 +1,13 @@
-use crate::{Context, Error};
+use crate::{
+    io_utils::{
+        change_log::OutputLog, context_extension::ContextExtension,
+        discord_message_format::vectorize_input,
+    },
+    Context, Error,
+};
 
-use super::*;
 use template_substitution_database::rusqlite;
 use text_interpolator::TextInterpolator;
-
-use io_util::*;
 
 const TEMPLATE_NAME_ERROR: &str = "Error: templates may only contain letters and numbers.";
 const NO_TEMPLATE_ERROR: &str =

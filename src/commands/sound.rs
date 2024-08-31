@@ -1,8 +1,6 @@
-use super::*;
 use std::{sync::Arc, time::Duration};
 
-use crate::{Data, HttpClient};
-use io_util::ContextExtension;
+use crate::{io_utils::context_extension::ContextExtension, Data, HttpClient};
 use poise::{serenity_prelude::async_trait, CreateReply};
 use serenity::all::{
     CacheHttp, ComponentInteraction, CreateActionRow, CreateButton, CreateInteractionResponse,

@@ -1,7 +1,5 @@
-use crate::{Context, Error};
+use crate::{io_utils::discord_message_format::extract_image_urls, Context, Error};
 
-use super::*;
-use io_util;
 use poise::{
     samples::HelpConfiguration,
     serenity_prelude::{self as serenity, ChannelId, CreateEmbed, CreateMessage},
@@ -46,7 +44,7 @@ pub async fn move_bot_pins(ctx: Context<'_>, to_channel: String) -> Result<(), E
                     .description(&pin.content)
                     .url(pin.link());
 
-                let image_urls = io_util::extract_image_urls(&pin.content);
+                let image_urls = extract_image_urls(&pin.content);
 
                 if image_urls.len() == 1 {
                     embed = embed.image(image_urls[0]);
@@ -60,7 +58,7 @@ pub async fn move_bot_pins(ctx: Context<'_>, to_channel: String) -> Result<(), E
                         .send_message(&ctx.http(), CreateMessage::new().embed(embed))
                         .await?;
 
-                    for image_url in io_util::extract_image_urls(&pin.content) {
+                    for image_url in extract_image_urls(&pin.content) {
                         ctx.defer().await?;
                         to_id
                             .send_message(

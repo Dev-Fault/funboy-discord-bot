@@ -1,4 +1,3 @@
-mod io_util;
 pub mod miscellaneous;
 pub mod random;
 pub mod sound;

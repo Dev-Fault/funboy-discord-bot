@@ -3,7 +3,7 @@ use std::str::FromStr;
 use rand::distributions::uniform::SampleUniform;
 use rand::Rng;
 
-use crate::commands::io_util;
+use crate::io_utils::discord_message_format::vectorize_input;
 use crate::Context;
 use crate::Error;
 
@@ -45,7 +45,7 @@ fn get_random_result<T: FromStr + PartialOrd + SampleUniform + ToString>(
 /// Example usage: **/random_word** words: **"apple tree" pear "orange tree" apricot**
 #[poise::command(slash_command, prefix_command)]
 pub async fn random_word(ctx: Context<'_>, words: String) -> Result<(), Error> {
-    let input = io_util::vectorize_input(&words);
+    let input = vectorize_input(&words);
     if input.len() < 2 {
         ctx.say(format!("Error: enter at least two entries."))
             .await?;
