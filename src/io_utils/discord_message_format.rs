@@ -100,7 +100,7 @@ mod tests {
             "cat \"\" \"United States of America\" bear snake lion \"my mom\"  \"ten bulls\" dog goat",
         );
 
-        dbg!(&vectorize_input(&input));
+        // dbg!(&vectorize_input(&input));
 
         assert_eq!(vectorize_input(&input).len(), 9);
     }

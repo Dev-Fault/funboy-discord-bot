@@ -8,6 +8,7 @@ use template_substitution_database::TemplateDatabase;
 use tokio::sync::Mutex;
 
 mod commands;
+#[allow(dead_code)]
 mod interpreter;
 mod io_utils;
 
