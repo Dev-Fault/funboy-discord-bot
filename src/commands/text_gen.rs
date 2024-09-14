@@ -1,4 +1,5 @@
 use crate::{
+    interpreter::{self, Interpreter},
     io_utils::{
         change_log::OutputLog, context_extension::ContextExtension,
         discord_message_format::vectorize_input,
@@ -425,8 +426,11 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
     });
 
     match output {
-        Ok(o) => {
-            ctx.multi_say(&o, false).await?;
+        Ok(output) => {
+            match interpret_code(&output) {
+                Ok(o) => ctx.multi_say(&o, false).await?,
+                Err(e) => ctx.say_ephemeral(&format!("Error: {}.", &e)[..]).await?,
+            };
         }
         Err(_) => {
             ctx.say(GENERATION_FAILED_ERROR).await?;
@@ -434,4 +438,36 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
     }
 
     Ok(())
+}
+
+fn interpret_code(input: &str) -> Result<String, String> {
+    let mut output = String::with_capacity(input.len());
+    let mut interpreter = Interpreter::new();
+    // "{ { {  } } { { } } } { }"
+
+    let mut open_brace_stack: Vec<usize> = Vec::new();
+
+    for (i, c) in input.char_indices() {
+        if c == '{' {
+            open_brace_stack.push(i);
+        } else if c == '}' {
+            if let Some(prev_i) = open_brace_stack.pop() {
+                let code = &input[prev_i + 1..i];
+                match interpreter.interpret(code) {
+                    Ok(o) => output.push_str(&o),
+                    Err(e) => return Err(e),
+                }
+            } else {
+                return Err("Unmatched curly braces".to_string());
+            }
+        } else if open_brace_stack.len() == 0 {
+            output.push(c);
+        }
+    }
+
+    if open_brace_stack.len() != 0 {
+        return Err("Unmatched curly braces".to_string());
+    }
+
+    Ok(output)
 }

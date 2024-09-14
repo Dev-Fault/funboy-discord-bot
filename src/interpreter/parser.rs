@@ -191,7 +191,8 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Command>, String> {
                 const VALID_PROCEDENTS: [TokenType; 2] =
                     [TokenType::Comma, TokenType::ClosingParenthesis];
 
-                if tokens.len() == i || !VALID_PROCEDENTS.contains(&tokens[i + 1].token_type) {
+                if tokens.len() <= (i + 1) || !VALID_PROCEDENTS.contains(&tokens[i + 1].token_type)
+                {
                     return Err(
                         "Closing quote must come before a comma or closing parenthesis".to_string(),
                     );
@@ -230,7 +231,9 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Command>, String> {
             TokenType::Command => {
                 let value = token.value.as_ref().expect(TOKEN_VALUE_EXCEPT).clone();
 
-                if tokens.len() == i || tokens[i + 1].token_type != TokenType::OpeningParenthesis {
+                if tokens.len() <= (i + 1)
+                    || tokens[i + 1].token_type != TokenType::OpeningParenthesis
+                {
                     return Err(format!(
                         "Command [{}] must come before an opening parenthesis",
                         value

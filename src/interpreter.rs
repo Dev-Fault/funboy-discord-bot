@@ -1,6 +1,6 @@
 use lexer::tokenize;
 use parser::{
-    parse, Command, CommandType, ValueType, ADD, CAPITALIZE, COPY, LOWER, MULTIPLY, PASTE,
+    parse, Command, CommandType, ValueType, ADD, CAPITALIZE, COPY, DIVIDE, LOWER, MULTIPLY, PASTE,
     REMOVE_WHITESPACE, REPEAT, SELECT_RANDOM, SUBTRACT, UPPER,
 };
 use rand::{self, Rng};
@@ -26,7 +26,7 @@ impl Interpreter {
         }
     }
 
-    pub fn interpret(&mut self, code: &str) -> Result<(), String> {
+    pub fn interpret(&mut self, code: &str) -> Result<String, String> {
         let commands = parse(tokenize(code))?;
 
         for command in commands {
@@ -34,7 +34,7 @@ impl Interpreter {
             self.log.push(value);
         }
 
-        Ok(())
+        Ok(self.output.drain(..).collect())
     }
 
     fn eval_command(&mut self, command: Command) -> Result<ValueType, String> {
@@ -161,21 +161,21 @@ impl Interpreter {
             }
             CommandType::Divide => {
                 if args.len() < 2 {
-                    return Err(format!("{} must have two or more arguments", MULTIPLY));
+                    return Err(format!("{} must have two or more arguments", DIVIDE));
                 } else if args_contain_float {
                     if let Some(mut sum) = args[0].extract_float() {
                         for arg in &args[1..args.len()] {
                             match arg.extract_float() {
                                 Some(value) => sum /= value,
                                 None => {
-                                    return Err(format!("{} can only operate on numbers", MULTIPLY))
+                                    return Err(format!("{} can only operate on numbers", DIVIDE))
                                 }
                             }
                         }
 
                         Ok(ValueType::Float(sum))
                     } else {
-                        return Err(format!("{} can only operate on numbers", MULTIPLY));
+                        return Err(format!("{} can only operate on numbers", DIVIDE));
                     }
                 } else {
                     if let Some(mut sum) = args[0].extract_int() {
@@ -183,14 +183,14 @@ impl Interpreter {
                             match arg.extract_int() {
                                 Some(value) => sum /= value,
                                 None => {
-                                    return Err(format!("{} can only operate on numbers", MULTIPLY))
+                                    return Err(format!("{} can only operate on numbers", DIVIDE))
                                 }
                             }
                         }
 
                         Ok(ValueType::Int(sum))
                     } else {
-                        return Err(format!("{} can only operate on numbers", MULTIPLY));
+                        return Err(format!("{} can only operate on numbers", DIVIDE));
                     }
                 }
             }
