@@ -1,5 +1,5 @@
 use crate::{
-    interpreter::{self, Interpreter},
+    interpreter::Interpreter,
     io_utils::{
         change_log::OutputLog, context_extension::ContextExtension,
         discord_message_format::vectorize_input,
@@ -407,8 +407,10 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
 
 /// Generates randomized text by replacing templates with a random substitute.
 ///
-/// To use this command enter text optionally containing templates marked with an apostrophe such
-/// as: **I love 'fruit**
+/// To use this command enter text optionally containing templates headed with any of the following
+/// characters ' ^ ` or _
+/// Example: **I love 'fruit**
+/// Example 2: **I love ^fruit**
 ///
 /// Templates will maintain proceding text if followed by a non alphanumeric characater such as:
 /// **'verb.ing** which may be subsituted into **flying** if a substitute exists named **fly**
@@ -424,6 +426,8 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
         Ok(sub) => Some(sub),
         Err(_) => None,
     });
+
+    dbg!(&output);
 
     match output {
         Ok(output) => {
@@ -443,7 +447,6 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
 fn interpret_code(input: &str) -> Result<String, String> {
     let mut output = String::with_capacity(input.len());
     let mut interpreter = Interpreter::new();
-    // "{ { {  } } { { } } } { }"
 
     let mut open_brace_stack: Vec<usize> = Vec::new();
 
@@ -451,8 +454,8 @@ fn interpret_code(input: &str) -> Result<String, String> {
         if c == '{' {
             open_brace_stack.push(i);
         } else if c == '}' {
-            if let Some(prev_i) = open_brace_stack.pop() {
-                let code = &input[prev_i + 1..i];
+            if let Some(last_open_brace) = open_brace_stack.pop() {
+                let code = &input[(last_open_brace + 1)..i];
                 match interpreter.interpret(code) {
                     Ok(o) => output.push_str(&o),
                     Err(e) => return Err(e),
