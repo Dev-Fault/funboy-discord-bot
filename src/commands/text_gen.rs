@@ -427,8 +427,6 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
         Err(_) => None,
     });
 
-    dbg!(&output);
-
     match output {
         Ok(output) => {
             match interpret_code(&output) {
@@ -446,29 +444,44 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
 
 fn interpret_code(input: &str) -> Result<String, String> {
     let mut output = String::with_capacity(input.len());
+    let mut code_stack: Vec<String> = Vec::new();
     let mut interpreter = Interpreter::new();
 
-    let mut open_brace_stack: Vec<usize> = Vec::new();
+    let mut code_depth: i16 = 0;
 
-    for (i, c) in input.char_indices() {
+    for c in input.chars() {
         if c == '{' {
-            open_brace_stack.push(i);
+            code_stack.push(String::new());
+            code_depth += 1;
         } else if c == '}' {
-            if let Some(last_open_brace) = open_brace_stack.pop() {
-                let code = &input[(last_open_brace + 1)..i];
-                match interpreter.interpret(code) {
-                    Ok(o) => output.push_str(&o),
-                    Err(e) => return Err(e),
-                }
-            } else {
+            code_depth -= 1;
+            if code_depth < 0 {
                 return Err("Unmatched curly braces".to_string());
+            } else {
+                match code_stack.pop() {
+                    Some(code) => {
+                        match interpreter.interpret(&code) {
+                            Ok(eval) => match code_stack.last_mut() {
+                                Some(code) => code.push_str(&eval),
+                                None => output.push_str(&eval),
+                            },
+                            Err(e) => return Err(e),
+                        };
+                    }
+                    None => {}
+                }
             }
-        } else if open_brace_stack.len() == 0 {
+        } else if code_depth == 0 {
             output.push(c);
+        } else {
+            match code_stack.last_mut() {
+                Some(s) => s.push(c),
+                None => {}
+            }
         }
     }
 
-    if open_brace_stack.len() != 0 {
+    if code_depth != 0 {
         return Err("Unmatched curly braces".to_string());
     }
 
