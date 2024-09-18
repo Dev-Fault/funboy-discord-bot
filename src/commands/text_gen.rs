@@ -408,7 +408,7 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
 /// Generates randomized text by replacing templates with a random substitute.
 ///
 /// To use this command enter text optionally containing templates headed with any of the following
-/// characters ' ^ ` or _
+/// characters ' ^ `
 /// Example: **I love 'fruit**
 /// Example 2: **I love ^fruit**
 ///
