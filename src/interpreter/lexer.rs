@@ -52,8 +52,13 @@ pub fn tokenize(code: &str) -> Vec<Token> {
             match symbol {
                 ESCAPED_QUOTE if inside_quote => {
                     let split = buffer.split_once(ESCAPE).unwrap();
-                    incomplete_string =
-                        Some(format!("{}{}", split.0.to_string(), split.1.to_string()));
+                    let text = format!("{}{}", split.0.to_string(), split.1.to_string());
+                    match incomplete_string {
+                        Some(ref mut str) => str.push_str(&text),
+                        None => {
+                            incomplete_string = Some(text);
+                        }
+                    }
                 }
                 QUOTE => {
                     if inside_quote {
@@ -220,6 +225,15 @@ mod tests {
         assert_eq!(tokens[15].value, None);
 
         // dbg!(tokens);
+    }
+
+    #[test]
+    fn escaped_quotes() {
+        let code = "print(\"\\\"qu\\\"o\\\"te\\\"\")";
+        let tokens = tokenize(code);
+        dbg!(&tokens[3]);
+        assert_eq!(tokens[3].token_type, TokenType::Text);
+        assert_eq!(tokens[3].value, Some("\"qu\"o\"te\"".to_string()));
     }
 
     #[test]
