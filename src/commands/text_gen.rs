@@ -412,10 +412,11 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
 /// Example: **I love 'fruit**
 /// Example 2: **I love ^fruit**
 ///
-/// Templates will maintain proceding text if followed by a non alphanumeric characater such as:
-/// **'verb.ing** which may be subsituted into **flying** if a substitute exists named **fly**
+/// You can add a suffix to a template by including another template character at the end of the
+/// template name:
+/// **^verb^ing** which may be subsituted into **flying** if a substitute exists named **fly**
 ///
-/// Example usage: **/generate I love 'fruit.s**
+/// Example usage: **/generate I love ^fruit^s**
 /// Example output: **I love apples!**
 #[poise::command(slash_command, prefix_command)]
 pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
