@@ -11,6 +11,7 @@ mod lexer;
 #[allow(dead_code)]
 mod parser;
 
+#[derive(Debug)]
 pub struct Interpreter {
     vars: HashMap<String, ValueType>,
     log: Vec<ValueType>,
@@ -403,9 +404,9 @@ mod tests {
         let code = "print(5, \"text\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        let output = interpreter.interpret(code).unwrap();
 
-        assert_eq!(interpreter.output, "5text");
+        assert_eq!(output, "5text");
     }
 
     #[test]
@@ -474,9 +475,9 @@ mod tests {
         let code = "copy(\"text\", text) print(paste(text))";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        let output = interpreter.interpret(code).unwrap();
 
-        assert_eq!(interpreter.output, "text");
+        assert_eq!(output, "text");
     }
 
     #[test]
@@ -511,9 +512,9 @@ mod tests {
     fn interpret_select_random() {
         let code = "print(select_random(\"apple\", \"orange\", 3, 6.7))";
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        let output = interpreter.interpret(code).unwrap();
 
-        assert!(interpreter.output.len() > 0);
-        dbg!(interpreter.output);
+        assert!(output.len() > 0);
+        dbg!(output);
     }
 }
