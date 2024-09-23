@@ -55,6 +55,7 @@ impl Interpreter {
                 }
                 ValueType::Identifier(_) => args.push(arg),
                 ValueType::None => args.push(arg),
+                ValueType::Bool(_) => args.push(arg),
             }
         }
 
@@ -339,6 +340,16 @@ impl Interpreter {
 
                 Ok(ValueType::Text(output))
             }
+            CommandType::IfThen => todo!(),
+            CommandType::IfThenElse => todo!(),
+            CommandType::Not => todo!(),
+            CommandType::And => todo!(),
+            CommandType::Or => todo!(),
+            CommandType::Eq => todo!(),
+            CommandType::Gt => todo!(),
+            CommandType::Lt => todo!(),
+            CommandType::StartsWith => todo!(),
+            CommandType::EndsWith => todo!(),
         }
     }
 }

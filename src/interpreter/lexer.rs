@@ -6,9 +6,12 @@ pub const CLOSING_PARENTHESIS: &str = ")";
 pub const QUOTE: &str = "\"";
 pub const ESCAPE: &str = "\\";
 pub const ESCAPED_QUOTE: &str = "\\\"";
+pub const KEYWORD_TRUE: &str = "true";
+pub const KEYWORD_FALSE: &str = "false";
 
 pub const SYMBOLS: [&str; 4] = [",", "(", ")", "\""];
 pub const QUOTE_SYMBOLS: [&str; 2] = [ESCAPED_QUOTE, QUOTE];
+pub const KEYWORDS: [&str; 2] = [KEYWORD_TRUE, KEYWORD_FALSE];
 
 #[derive(Debug, PartialEq)]
 pub enum TokenType {
@@ -21,6 +24,7 @@ pub enum TokenType {
     Text,
     Number,
     Identifier,
+    Keyword,
 }
 
 #[derive(Debug)]
@@ -106,6 +110,8 @@ pub fn tokenize(code: &str) -> Vec<Token> {
 
                         if left.trim().parse::<f64>().is_ok() {
                             token_type = TokenType::Number
+                        } else if KEYWORDS.contains(&left.trim()) {
+                            token_type = TokenType::Keyword
                         } else {
                             token_type = TokenType::Identifier
                         }
@@ -127,6 +133,8 @@ pub fn tokenize(code: &str) -> Vec<Token> {
 
                         if left.trim().parse::<f64>().is_ok() {
                             token_type = TokenType::Number
+                        } else if KEYWORDS.contains(&left.trim()) {
+                            token_type = TokenType::Keyword
                         } else {
                             token_type = TokenType::Identifier
                         }
@@ -264,5 +272,22 @@ mod tests {
         assert_eq!(tokens[5].value, None);
 
         // dbg!(tokens);
+    }
+
+    #[test]
+    fn keyword_token() {
+        let code = "print(true)";
+        let tokens = tokenize(code);
+        assert_eq!(tokens[0].token_type, TokenType::Command);
+        assert_eq!(tokens[0].value, Some("print".to_string()));
+
+        assert_eq!(tokens[1].token_type, TokenType::OpeningParenthesis);
+        assert_eq!(tokens[1].value, None);
+
+        assert_eq!(tokens[2].token_type, TokenType::Keyword);
+        assert_eq!(tokens[2].value, Some("true".to_string()));
+
+        assert_eq!(tokens[3].token_type, TokenType::ClosingParenthesis);
+        assert_eq!(tokens[3].value, None);
     }
 }

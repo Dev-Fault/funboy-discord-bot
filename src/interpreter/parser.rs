@@ -5,6 +5,10 @@
 
 use std::str::FromStr;
 
+use crate::interpreter::lexer::KEYWORDS;
+use crate::interpreter::lexer::KEYWORD_FALSE;
+use crate::interpreter::lexer::KEYWORD_TRUE;
+
 use super::lexer::Token;
 use super::lexer::TokenType;
 
@@ -27,7 +31,31 @@ pub const PASTE: &str = "paste";
 pub const PRINT: &str = "print";
 pub const CONCATENATE: &str = "concat";
 
-const COMMAND_COUNT: usize = 14;
+// Logic
+pub const IF_THEN: &str = "if_then";
+pub const IF_THEN_ELSE: &str = "if_then_else";
+pub const NOT: &str = "not";
+pub const AND: &str = "and";
+pub const OR: &str = "or";
+pub const EQ: &str = "eq";
+pub const GT: &str = "gt";
+pub const LT: &str = "lt";
+pub const STARTS_WITH: &str = "starts_with";
+pub const ENDS_WITH: &str = "ends_with";
+
+// Logic
+// if_then(condition: bool, action: command) -> evaluated action
+// if_then_else(condition: bool, then_action: command, else_action: command) -> evaluated action
+// not(bool) -> bool
+// and(bool, bool) -> bool
+// or(bool, bool) -> bool
+// eq(value, value) -> bool
+// gt(value: number, value2: number) -> bool
+// lt(value: number, value2: number) -> bool
+// starts_with(self: text, pattern: text) -> bool
+// ends_with(self: text, pattern: text) -> bool
+
+const COMMAND_COUNT: usize = 24;
 const COMMANDS: [&str; COMMAND_COUNT] = [
     ADD,
     SUBTRACT,
@@ -43,6 +71,16 @@ const COMMANDS: [&str; COMMAND_COUNT] = [
     PASTE,
     PRINT,
     CONCATENATE,
+    IF_THEN,
+    IF_THEN_ELSE,
+    NOT,
+    AND,
+    OR,
+    EQ,
+    GT,
+    LT,
+    STARTS_WITH,
+    ENDS_WITH,
 ];
 
 #[derive(Debug, PartialEq, Clone)]
@@ -62,6 +100,16 @@ pub enum CommandType {
     Paste,
     Print,
     Concatenate,
+    IfThen,
+    IfThenElse,
+    Not,
+    And,
+    Or,
+    Eq,
+    Gt,
+    Lt,
+    StartsWith,
+    EndsWith,
 }
 
 impl FromStr for CommandType {
@@ -84,6 +132,16 @@ impl FromStr for CommandType {
             PRINT => Ok(CommandType::Print),
             REMOVE_WHITESPACE => Ok(CommandType::RemoveWhitespace),
             CONCATENATE => Ok(CommandType::Concatenate),
+            IF_THEN => Ok(CommandType::IfThen),
+            IF_THEN_ELSE => Ok(CommandType::IfThenElse),
+            NOT => Ok(CommandType::Not),
+            AND => Ok(CommandType::And),
+            OR => Ok(CommandType::Or),
+            EQ => Ok(CommandType::Eq),
+            GT => Ok(CommandType::Gt),
+            LT => Ok(CommandType::Lt),
+            STARTS_WITH => Ok(CommandType::StartsWith),
+            ENDS_WITH => Ok(CommandType::EndsWith),
             _ => Err(format!("Invalid command {}", s)),
         }
     }
@@ -107,6 +165,16 @@ impl ToString for CommandType {
             CommandType::Print => PRINT,
             CommandType::RemoveWhitespace => REMOVE_WHITESPACE,
             CommandType::Concatenate => CONCATENATE,
+            CommandType::IfThen => IF_THEN,
+            CommandType::IfThenElse => IF_THEN_ELSE,
+            CommandType::Not => NOT,
+            CommandType::And => AND,
+            CommandType::Or => OR,
+            CommandType::Eq => EQ,
+            CommandType::Gt => GT,
+            CommandType::Lt => LT,
+            CommandType::StartsWith => STARTS_WITH,
+            CommandType::EndsWith => ENDS_WITH,
         }
         .to_string()
     }
@@ -117,6 +185,7 @@ pub enum ValueType {
     Text(String),
     Int(i64),
     Float(f64),
+    Bool(bool),
     Identifier(String),
     Command(Command),
     None,
@@ -146,6 +215,7 @@ impl ToString for ValueType {
             ValueType::Float(value) => value.to_string(),
             ValueType::Identifier(value) => value.to_string(),
             ValueType::Command(value) => value.command_type.to_string(),
+            ValueType::Bool(value) => value.to_string(),
             ValueType::None => "".to_string(),
         }
     }
@@ -315,6 +385,35 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Command>, String> {
                         .push(ValueType::Identifier(value));
                 }
             }
+            TokenType::Keyword => {
+                const VALID_PRECEDENTS: [TokenType; 2] =
+                    [TokenType::Comma, TokenType::OpeningParenthesis];
+
+                let value = token.value.as_ref().expect(TOKEN_VALUE_EXCEPT).clone();
+
+                if tokens.len() < 1 || !VALID_PRECEDENTS.contains(&tokens[i - 1].token_type) {
+                    return Err(format!(
+                        "Keyword [{}] must come after a comma or opening parenthesis",
+                        value
+                    ));
+                } else if command_stack.len() == 0 {
+                    return Err(format!("Keyword [{}] must be inside of a command", value));
+                } else {
+                    let value_type = match &value[..] {
+                        KEYWORD_TRUE => ValueType::Bool(true),
+                        KEYWORD_FALSE => ValueType::Bool(false),
+                        _ => {
+                            return Err(format!("Non existant keyword [{}]", value));
+                        }
+                    };
+
+                    command_stack
+                        .last_mut()
+                        .expect(COMMAND_STACK_EXPECT)
+                        .args
+                        .push(value_type);
+                }
+            }
         }
     }
 
@@ -348,6 +447,25 @@ mod tests {
         );
 
         // dbg!(commands);
+    }
+
+    #[test]
+    fn logical_parse() {
+        let code = "if_then(true, print(\"true\"))";
+
+        let commands = parse(tokenize(code)).unwrap();
+
+        assert_eq!(commands[0].command_type, CommandType::IfThen);
+        assert_eq!(
+            commands[0].args,
+            vec![
+                ValueType::Bool(true),
+                ValueType::Command(Command {
+                    command_type: CommandType::Print,
+                    args: vec![ValueType::Text("true".to_string())],
+                })
+            ]
+        )
     }
 
     #[test]
