@@ -46,12 +46,12 @@ impl Interpreter {
 
         for arg in command.args {
             match arg {
-                ValueType::Command(ref command) => {
+                ValueType::Command(ref sub_command) => {
                     match command.command_type {
                         CommandType::IfThen if i == 1 => args.push(arg),
                         CommandType::IfThenElse if i == 1 || i == 2 => args.push(arg),
-                        CommandType::Repeat if i == 1 => args.push(arg),
-                        _ => args.push(self.eval_command(command.clone())?),
+                        CommandType::Repeat if i != 0 => args.push(arg),
+                        _ => args.push(self.eval_command(sub_command.clone())?),
                     };
                 }
                 ValueType::Text(_) => args.push(arg),
@@ -318,7 +318,42 @@ impl Interpreter {
                     }
                 }
             }
-            CommandType::Repeat => Err(format!("command {} command not implemented", REPEAT)),
+            CommandType::Repeat => {
+                if args.len() < 2 {
+                    return Err(format!(
+                        "command {} must have two or more arguments",
+                        REPEAT
+                    ));
+                } else {
+                    match &args[0] {
+                        ValueType::Int(value) => {
+                            // TODO: Figure out a different solution to this problem later
+                            if *value > 1000 {
+                                return Err(format!("first argument of {} command must be less than or equal to 1000", REPEAT));
+                            }
+                            for _i in 0..*value {
+                                for arg in &args[1..args.len()] {
+                                    if let ValueType::Command(command) = arg {
+                                        let _ = self.eval_command(command.clone());
+                                    } else {
+                                        return Err(format!(
+                                            "arguments to command {} must be of type command",
+                                            REPEAT
+                                        ));
+                                    };
+                                }
+                            }
+                            return Ok(ValueType::None);
+                        }
+                        _ => {
+                            return Err(format!(
+                                "first argument of command {} must be an integer",
+                                REPEAT
+                            ));
+                        }
+                    }
+                }
+            }
             CommandType::Copy => {
                 if args.len() != 2 {
                     return Err(format!("command {} must have exactly two arguments", COPY));
@@ -591,6 +626,17 @@ impl Interpreter {
 mod tests {
 
     use crate::interpreter::{parser::ValueType, Interpreter};
+
+    #[test]
+    fn interpret_repeat() {
+        let code = "repeat(5, print(\"hello \"))";
+
+        let mut interpreter = Interpreter::new();
+        let output = interpreter.interpret(code).unwrap();
+
+        assert_eq!(interpreter.log[0], ValueType::None);
+        assert_eq!(output, "hello hello hello hello hello ");
+    }
 
     #[test]
     fn interpret_if_then() {
