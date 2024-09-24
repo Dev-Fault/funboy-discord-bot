@@ -14,6 +14,8 @@ mod io_utils;
 
 use commands::sound::{TrackComponent, TrackList, TRACK_BUTTON_ID};
 
+pub const FUNBOY_DB_PATH: &str = "funboy.db";
+
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
@@ -91,7 +93,7 @@ async fn main() {
 
                 Ok(Data {
                     template_db: Mutex::new(
-                        TemplateDatabase::from_path("funboy.db")
+                        TemplateDatabase::from_path(FUNBOY_DB_PATH)
                             .expect("Failed to load funboy database."),
                     ),
                     track_list: Mutex::new(TrackList::new()).into(),

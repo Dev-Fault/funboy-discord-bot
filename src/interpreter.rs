@@ -1,11 +1,15 @@
 use lexer::tokenize;
 use parser::{
-    parse, Command, CommandType, ValueType, ADD, AND, CAPITALIZE, COPY, DIVIDE, ENDS_WITH, EQ, GT,
-    IF_THEN, IF_THEN_ELSE, LOWER, LT, MULTIPLY, NOT, OR, PASTE, REMOVE_WHITESPACE, REPEAT,
-    SELECT_RANDOM, STARTS_WITH, SUBTRACT, UPPER,
+    parse, Command, CommandType, ValueType, ADD, AND, CAPITALIZE, COPY, DIVIDE, ENDS_WITH, EQ,
+    GET_SUB, GT, IF_THEN, IF_THEN_ELSE, LOWER, LT, MULTIPLY, NOT, OR, PASTE, REMOVE_WHITESPACE,
+    REPEAT, SELECT_RANDOM, STARTS_WITH, SUBTRACT, UPPER,
 };
 use rand::{self, Rng};
 use std::collections::HashMap;
+use template_substitution_database::TemplateDatabase;
+use text_interpolator::TextInterpolator;
+
+use crate::FUNBOY_DB_PATH;
 
 #[allow(dead_code)]
 mod lexer;
@@ -17,6 +21,8 @@ pub struct Interpreter {
     vars: HashMap<String, ValueType>,
     log: Vec<ValueType>,
     output: String,
+    db: TemplateDatabase,
+    interpolator: TextInterpolator,
 }
 
 impl Interpreter {
@@ -25,6 +31,9 @@ impl Interpreter {
             vars: HashMap::new(),
             log: Vec::new(),
             output: String::new(),
+            db: TemplateDatabase::from_path(FUNBOY_DB_PATH)
+                .expect("Funboy database failed to load."),
+            interpolator: TextInterpolator::default(),
         }
     }
 
@@ -618,6 +627,34 @@ impl Interpreter {
                     }
                 }
             }
+            CommandType::GetSub => {
+                if args.len() != 1 {
+                    return Err(format!("command {} can only have one argument", GET_SUB));
+                } else {
+                    match &args[0] {
+                        ValueType::Text(sub) => {
+                            let output =
+                                self.interpolator
+                                    .interp(&("^".to_owned() + sub), &|template| match self
+                                        .db
+                                        .get_random_subs(template)
+                                    {
+                                        Ok(sub) => Some(sub),
+                                        Err(_) => None,
+                                    });
+
+                            match output {
+                                Ok(o) => Ok(ValueType::Text(o)),
+                                Err(e) => Err(e.to_string()),
+                            }
+                        }
+                        _ => Err(format!(
+                            "first argument of command {} must be of type Text",
+                            GET_SUB
+                        )),
+                    }
+                }
+            }
         }
     }
 }
@@ -626,6 +663,18 @@ impl Interpreter {
 mod tests {
 
     use crate::interpreter::{parser::ValueType, Interpreter};
+
+    #[test]
+    fn interpret_get_sub() {
+        let code = "print(get_sub(\"noun\"))";
+
+        let mut interpreter = Interpreter::new();
+        let output = interpreter.interpret(code).unwrap();
+
+        dbg!(&output);
+        assert_ne!(output, "noun");
+        assert!(output.len() > 0);
+    }
 
     #[test]
     fn interpret_repeat() {

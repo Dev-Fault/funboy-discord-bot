@@ -5,7 +5,6 @@
 
 use std::str::FromStr;
 
-use crate::interpreter::lexer::KEYWORDS;
 use crate::interpreter::lexer::KEYWORD_FALSE;
 use crate::interpreter::lexer::KEYWORD_TRUE;
 
@@ -30,6 +29,7 @@ pub const COPY: &str = "copy";
 pub const PASTE: &str = "paste";
 pub const PRINT: &str = "print";
 pub const CONCATENATE: &str = "concat";
+pub const GET_SUB: &str = "get_sub";
 
 // Logic
 pub const IF_THEN: &str = "if_then";
@@ -55,7 +55,7 @@ pub const ENDS_WITH: &str = "ends_with";
 // starts_with(self: text, pattern: text) -> bool
 // ends_with(self: text, pattern: text) -> bool
 
-const COMMAND_COUNT: usize = 24;
+const COMMAND_COUNT: usize = 25;
 const COMMANDS: [&str; COMMAND_COUNT] = [
     ADD,
     SUBTRACT,
@@ -81,6 +81,7 @@ const COMMANDS: [&str; COMMAND_COUNT] = [
     LT,
     STARTS_WITH,
     ENDS_WITH,
+    GET_SUB,
 ];
 
 #[derive(Debug, PartialEq, Clone)]
@@ -110,6 +111,7 @@ pub enum CommandType {
     Lt,
     StartsWith,
     EndsWith,
+    GetSub,
 }
 
 impl FromStr for CommandType {
@@ -142,6 +144,7 @@ impl FromStr for CommandType {
             LT => Ok(CommandType::Lt),
             STARTS_WITH => Ok(CommandType::StartsWith),
             ENDS_WITH => Ok(CommandType::EndsWith),
+            GET_SUB => Ok(CommandType::GetSub),
             _ => Err(format!("Invalid command {}", s)),
         }
     }
@@ -175,6 +178,7 @@ impl ToString for CommandType {
             CommandType::Lt => LT,
             CommandType::StartsWith => STARTS_WITH,
             CommandType::EndsWith => ENDS_WITH,
+            CommandType::GetSub => GET_SUB,
         }
         .to_string()
     }
