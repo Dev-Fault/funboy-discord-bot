@@ -1,13 +1,9 @@
 use lexer::tokenize;
-use parser::{
-    parse, Command, CommandType, ValueType, ADD, AND, CAPITALIZE, COPY, DIVIDE, ENDS_WITH, EQ,
-    GET_SUB, GT, IF_THEN, IF_THEN_ELSE, LOWER, LT, MULTIPLY, NOT, OR, PASTE, REMOVE_WHITESPACE,
-    REPEAT, SELECT_RANDOM, STARTS_WITH, SUBTRACT, UPPER,
-};
+use parser::{parse, Command, CommandType, ValueType};
 use rand::{self, Rng};
 use std::collections::HashMap;
 use template_substitution_database::TemplateDatabase;
-use text_interpolator::TextInterpolator;
+use text_interpolator::{defaults::TEMPLATE_CARROT, TextInterpolator};
 
 use crate::FUNBOY_DB_PATH;
 
@@ -15,6 +11,28 @@ use crate::FUNBOY_DB_PATH;
 mod lexer;
 #[allow(dead_code)]
 mod parser;
+
+const REPEAT_LIMIT: u16 = 100;
+
+const ERROR_NO_ARGS: &str = "takes no arguments";
+const ERROR_TWO_OR_MORE_ARGS: &str = "must have two or more arguments";
+const ERROR_EXACTLY_ONE_ARG: &str = "must have exactly one argument";
+const ERROR_EXACTLY_TWO_ARGS: &str = "must have exactly two arguments";
+const ERROR_EXACTLY_THREE_ARGS: &str = "must have exactly three arguments";
+const ERROR_ARGS_MUST_BE_NUMBER: &str = "all arguments must be of type Number";
+const ERROR_ARGS_MUST_BE_BOOL: &str = "all arguments must be of type Bool";
+const ERROR_ARGS_MUST_BE_TEXT: &str = "all arguments must be of type Text";
+const ERROR_ARG_MUST_BE_TEXT: &str = "argument must be of type Text";
+const ERROR_ARG_MUST_BE_NUMBER: &str = "argument must be of type Number";
+const ERROR_ARG_MUST_BE_IDENTIFIER: &str = "argument must be of type Identifier";
+const ERROR_ARG_ONE_MUST_BE_WHOLE_NUMBER: &str = "first argument must be a whole number";
+const ERROR_ARG_ONE_MUST_BE_BOOL: &str = "first argument must be of type Bool";
+const ERROR_ARGS_AFTER_ARG_ONE_MUST_BE_COMMAND: &str =
+    "arguments following first argument must be of type Command";
+const ERROR_ARG_ONE_MUST_NOT_BE_IDENTIFIER: &str = "first argument must not be of type Identifier";
+const ERROR_ARG_ONE_MUST_NOT_BE_NONE: &str = "first argument must not be of type None";
+const ERROR_ARG_TWO_MUST_BE_IDENTIFIER: &str = "second argument must be of type Identifier";
+const ERROR_UNKNOWN_IDENTIFIER: &str = "No identifier exists named";
 
 #[derive(Debug)]
 pub struct Interpreter {
@@ -76,22 +94,24 @@ impl Interpreter {
             i += 1;
         }
 
-        match command.command_type {
+        let command_type = command.command_type;
+
+        match command_type {
             CommandType::Add => {
                 if args.len() < 2 {
-                    return Err(format!("command {} must have two or more arguments", ADD));
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
                 } else if args_contain_float {
                     if let Some(mut sum) = args[0].extract_float() {
                         for arg in &args[1..args.len()] {
                             match arg.extract_float() {
                                 Some(value) => sum += value,
-                                None => return Err(format!("{} can only operate on numbers", ADD)),
+                                None => return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER)),
                             }
                         }
 
                         Ok(ValueType::Float(sum))
                     } else {
-                        return Err(format!("command {} can only operate on numbers", ADD));
+                        return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                     }
                 } else {
                     if let Some(mut sum) = args[0].extract_int() {
@@ -99,43 +119,34 @@ impl Interpreter {
                             match arg.extract_int() {
                                 Some(value) => sum += value,
                                 None => {
-                                    return Err(format!(
-                                        "command {} can only operate on numbers",
-                                        ADD
-                                    ))
+                                    return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                                 }
                             }
                         }
 
                         Ok(ValueType::Int(sum))
                     } else {
-                        return Err(format!("command {} can only operate on numbers", ADD));
+                        return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                     }
                 }
             }
             CommandType::Subtract => {
                 if args.len() < 2 {
-                    return Err(format!(
-                        "command {} must have two or more arguments",
-                        SUBTRACT
-                    ));
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
                 } else if args_contain_float {
                     if let Some(mut diff) = args[0].extract_float() {
                         for arg in &args[1..args.len()] {
                             match arg.extract_float() {
                                 Some(value) => diff -= value,
                                 None => {
-                                    return Err(format!(
-                                        "command {} can only operate on numbers",
-                                        SUBTRACT
-                                    ))
+                                    return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                                 }
                             }
                         }
 
                         Ok(ValueType::Float(diff))
                     } else {
-                        return Err(format!("command {} can only operate on numbers", SUBTRACT));
+                        return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                     }
                 } else {
                     if let Some(mut diff) = args[0].extract_int() {
@@ -143,43 +154,34 @@ impl Interpreter {
                             match arg.extract_int() {
                                 Some(value) => diff -= value,
                                 None => {
-                                    return Err(format!(
-                                        "command {} can only operate on numbers",
-                                        SUBTRACT
-                                    ))
+                                    return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                                 }
                             }
                         }
 
                         Ok(ValueType::Int(diff))
                     } else {
-                        return Err(format!("command {} can only operate on numbers", SUBTRACT));
+                        return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                     }
                 }
             }
             CommandType::Multiply => {
                 if args.len() < 2 {
-                    return Err(format!(
-                        "command {} must have two or more arguments",
-                        MULTIPLY
-                    ));
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
                 } else if args_contain_float {
                     if let Some(mut sum) = args[0].extract_float() {
                         for arg in &args[1..args.len()] {
                             match arg.extract_float() {
                                 Some(value) => sum *= value,
                                 None => {
-                                    return Err(format!(
-                                        "command {} can only operate on numbers",
-                                        MULTIPLY
-                                    ))
+                                    return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                                 }
                             }
                         }
 
                         Ok(ValueType::Float(sum))
                     } else {
-                        return Err(format!("command {} can only operate on numbers", MULTIPLY));
+                        return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                     }
                 } else {
                     if let Some(mut sum) = args[0].extract_int() {
@@ -187,43 +189,34 @@ impl Interpreter {
                             match arg.extract_int() {
                                 Some(value) => sum *= value,
                                 None => {
-                                    return Err(format!(
-                                        "command {} can only operate on numbers",
-                                        MULTIPLY
-                                    ))
+                                    return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                                 }
                             }
                         }
 
                         Ok(ValueType::Int(sum))
                     } else {
-                        return Err(format!("command {} can only operate on numbers", MULTIPLY));
+                        return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                     }
                 }
             }
             CommandType::Divide => {
                 if args.len() < 2 {
-                    return Err(format!(
-                        "command {} must have two or more arguments",
-                        DIVIDE
-                    ));
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
                 } else if args_contain_float {
                     if let Some(mut sum) = args[0].extract_float() {
                         for arg in &args[1..args.len()] {
                             match arg.extract_float() {
                                 Some(value) => sum /= value,
                                 None => {
-                                    return Err(format!(
-                                        "command {} can only operate on numbers",
-                                        DIVIDE
-                                    ))
+                                    return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                                 }
                             }
                         }
 
                         Ok(ValueType::Float(sum))
                     } else {
-                        return Err(format!("command {} can only operate on numbers", DIVIDE));
+                        return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                     }
                 } else {
                     if let Some(mut sum) = args[0].extract_int() {
@@ -231,26 +224,20 @@ impl Interpreter {
                             match arg.extract_int() {
                                 Some(value) => sum /= value,
                                 None => {
-                                    return Err(format!(
-                                        "command {} can only operate on numbers",
-                                        DIVIDE
-                                    ))
+                                    return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                                 }
                             }
                         }
 
                         Ok(ValueType::Int(sum))
                     } else {
-                        return Err(format!("command {} can only operate on numbers", DIVIDE));
+                        return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                     }
                 }
             }
             CommandType::SelectRandom => {
                 if args.len() < 2 {
-                    Err(format!(
-                        "command {} must have at least two arguments",
-                        SELECT_RANDOM
-                    ))
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
                 } else {
                     let mut rng = rand::thread_rng();
                     let index = rng.gen_range(0..args.len());
@@ -259,7 +246,7 @@ impl Interpreter {
             }
             CommandType::RandomRange => {
                 if args.len() != 2 {
-                    return Err(format!("command {} must have exactly two arguments", UPPER));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
                 } else {
                     let mut rng = rand::thread_rng();
                     match &args[0] {
@@ -269,7 +256,7 @@ impl Interpreter {
                                 Ok(ValueType::Float(rng.gen_range((*min as f64)..=*max)))
                             }
 
-                            _ => Err(format!("command {} can only operate on numbers", UPPER)),
+                            _ => Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER)),
                         },
                         ValueType::Float(min) => match &args[1] {
                             ValueType::Int(max) => {
@@ -278,18 +265,15 @@ impl Interpreter {
                             ValueType::Float(max) => {
                                 Ok(ValueType::Float(rng.gen_range(*min..=*max)))
                             }
-                            _ => Err(format!("command {} can only operate on numbers", UPPER)),
+                            _ => Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER)),
                         },
-                        _ => Err(format!("command {} can only operate on numbers", UPPER)),
+                        _ => Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER)),
                     }
                 }
             }
             CommandType::Capitalize => {
                 if args.len() != 1 {
-                    return Err(format!(
-                        "command {} must have only one argument",
-                        CAPITALIZE
-                    ));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
                 } else {
                     match &args[0] {
                         ValueType::Text(text) => {
@@ -303,106 +287,95 @@ impl Interpreter {
                                 return Ok(ValueType::Text("".to_string()));
                             }
                         }
-                        _ => Err(format!("command {} can only operate on text", CAPITALIZE)),
+                        _ => Err(command_type.gen_err(ERROR_ARG_MUST_BE_TEXT)),
                     }
                 }
             }
             CommandType::Upper => {
                 if args.len() != 1 {
-                    return Err(format!("command {} must have only one argument", UPPER));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
                 } else {
                     match &args[0] {
                         ValueType::Text(text) => Ok(ValueType::Text(text.to_uppercase())),
-                        _ => Err(format!("command {} can only operate on text", UPPER)),
+                        _ => Err(command_type.gen_err(ERROR_ARG_MUST_BE_TEXT)),
                     }
                 }
             }
             CommandType::Lower => {
                 if args.len() != 1 {
-                    return Err(format!("command {} must have only one argument", LOWER));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
                 } else {
                     match &args[0] {
                         ValueType::Text(text) => Ok(ValueType::Text(text.to_lowercase())),
-                        _ => Err(format!("command {} can only operate on text", LOWER)),
+                        _ => Err(command_type.gen_err(ERROR_ARG_MUST_BE_TEXT)),
                     }
                 }
             }
             CommandType::Repeat => {
                 if args.len() < 2 {
-                    return Err(format!(
-                        "command {} must have two or more arguments",
-                        REPEAT
-                    ));
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
                 } else {
                     match &args[0] {
                         ValueType::Int(value) => {
-                            // TODO: Figure out a different solution to this problem later
-                            if *value > 1000 {
-                                return Err(format!("first argument of {} command must be less than or equal to 1000", REPEAT));
+                            if *value > REPEAT_LIMIT.into() {
+                                return Err(command_type.gen_err(&format!(
+                                    "must not exceed more than {} repetitions",
+                                    REPEAT_LIMIT
+                                )));
                             }
                             for _i in 0..*value {
                                 for arg in &args[1..args.len()] {
                                     if let ValueType::Command(command) = arg {
                                         let _ = self.eval_command(command.clone());
                                     } else {
-                                        return Err(format!(
-                                            "arguments to command {} must be of type command",
-                                            REPEAT
-                                        ));
+                                        return Err(command_type
+                                            .gen_err(ERROR_ARGS_AFTER_ARG_ONE_MUST_BE_COMMAND));
                                     };
                                 }
                             }
                             return Ok(ValueType::None);
                         }
                         _ => {
-                            return Err(format!(
-                                "first argument of command {} must be an integer",
-                                REPEAT
-                            ));
+                            return Err(command_type.gen_err(ERROR_ARG_ONE_MUST_BE_WHOLE_NUMBER));
                         }
                     }
                 }
             }
             CommandType::Copy => {
                 if args.len() != 2 {
-                    return Err(format!("command {} must have exactly two arguments", COPY));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
                 } else {
                     if let ValueType::Identifier(identifier) = &args[1] {
                         match &args[0] {
-                            ValueType::Identifier(_) => Err(format!(
-                                "The first argument of command {} must not be an identifier",
-                                COPY
-                            )),
-                            ValueType::None => Err(format!(
-                                "The first argument of command {} must not be of type None",
-                                COPY
-                            )),
+                            ValueType::Identifier(_) => {
+                                Err(command_type.gen_err(ERROR_ARG_ONE_MUST_NOT_BE_IDENTIFIER))
+                            }
+                            ValueType::None => {
+                                Err(command_type.gen_err(ERROR_ARG_ONE_MUST_NOT_BE_NONE))
+                            }
                             _ => {
                                 self.vars.insert(identifier.to_string(), args[0].clone());
                                 return Ok(ValueType::None);
                             }
                         }
                     } else {
-                        return Err(format!(
-                            "Second argument of command {} must be an identifier",
-                            COPY
-                        ));
+                        return Err(command_type.gen_err(ERROR_ARG_TWO_MUST_BE_IDENTIFIER));
                     }
                 }
             }
             CommandType::Paste => {
                 if args.len() != 1 {
-                    return Err(format!("command {} must have only one argument", PASTE));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
                 } else {
                     match &args[0] {
                         ValueType::Identifier(identifier) => match self.vars.get(identifier) {
                             Some(value) => Ok(value.clone()),
-                            None => Err(format!("No identifier exists named {}", identifier)),
+                            None => Err(command_type.gen_err(&format!(
+                                "{} **{}**",
+                                ERROR_UNKNOWN_IDENTIFIER, identifier
+                            ))),
                         },
-                        _ => Err(format!(
-                            "argument to command {} must be an identifier",
-                            PASTE
-                        )),
+                        _ => Err(command_type.gen_err(ERROR_ARG_MUST_BE_IDENTIFIER)),
                     }
                 }
             }
@@ -414,19 +387,13 @@ impl Interpreter {
             }
             CommandType::RemoveWhitespace => {
                 if args.len() != 1 {
-                    return Err(format!(
-                        "command {} must only have one argument",
-                        REMOVE_WHITESPACE
-                    ));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
                 } else {
                     match &args[0] {
                         ValueType::Text(text) => {
                             Ok(ValueType::Text(text.split_whitespace().collect()))
                         }
-                        _ => Err(format!(
-                            "command {} can only operate on text",
-                            REMOVE_WHITESPACE
-                        )),
+                        _ => Err(command_type.gen_err(ERROR_ARG_MUST_BE_TEXT)),
                     }
                 }
             }
@@ -441,7 +408,7 @@ impl Interpreter {
             }
             CommandType::IfThen => {
                 if args.len() != 2 {
-                    return Err(format!("command {} must have two arguments", IF_THEN));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
                 } else {
                     match &args[0] {
                         ValueType::Bool(bool) => {
@@ -454,19 +421,13 @@ impl Interpreter {
                                 Ok(ValueType::None)
                             }
                         }
-                        _ => Err(format!(
-                            "first argument of command {} must evaluate to a boolean value",
-                            IF_THEN
-                        )),
+                        _ => Err(command_type.gen_err(ERROR_ARG_ONE_MUST_BE_BOOL)),
                     }
                 }
             }
             CommandType::IfThenElse => {
                 if args.len() != 3 {
-                    return Err(format!(
-                        "command {} must have three arguments",
-                        IF_THEN_ELSE
-                    ));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_THREE_ARGS));
                 } else {
                     match &args[0] {
                         ValueType::Bool(bool) => {
@@ -482,55 +443,49 @@ impl Interpreter {
                                 }
                             }
                         }
-                        _ => Err(format!(
-                            "first argument of command {} must evaluate to a boolean value",
-                            IF_THEN_ELSE
-                        )),
+                        _ => Err(command_type.gen_err(ERROR_ARG_ONE_MUST_BE_BOOL)),
                     }
                 }
             }
             CommandType::Not => {
                 if args.len() != 1 {
-                    return Err(format!("command {} must only have one argument", NOT));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
                 } else {
                     match &args[0] {
                         ValueType::Bool(bool) => Ok(ValueType::Bool(!*bool)),
-                        _ => Err(format!(
-                            "first argument of command {} must evaluate to a boolean value",
-                            NOT
-                        )),
+                        _ => Err(command_type.gen_err(ERROR_ARG_ONE_MUST_BE_BOOL)),
                     }
                 }
             }
             CommandType::And => {
                 if args.len() < 2 {
-                    return Err(format!("command {} must have at least two arguments", AND));
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
                 }
                 let mut value: bool = true;
                 for arg in args {
                     match arg {
                         ValueType::Bool(bool) => value = value & bool,
-                        _ => return Err(format!("command {} only works on boolean values", AND)),
+                        _ => return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_BOOL)),
                     }
                 }
                 Ok(ValueType::Bool(value))
             }
             CommandType::Or => {
                 if args.len() < 2 {
-                    return Err(format!("command {} must have at least two arguments", OR));
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
                 }
                 let mut value: bool = false;
                 for arg in args {
                     match arg {
                         ValueType::Bool(bool) => value = value | bool,
-                        _ => return Err(format!("command {} only works on boolean values", OR)),
+                        _ => return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_BOOL)),
                     }
                 }
                 Ok(ValueType::Bool(value))
             }
             CommandType::Eq => {
                 if args.len() != 2 {
-                    return Err(format!("command {} must have two arguments", EQ));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
                 } else {
                     match (&args[0], &args[1]) {
                         (ValueType::Text(value_a), ValueType::Text(value_b)) => {
@@ -553,17 +508,17 @@ impl Interpreter {
                         (ValueType::Bool(value_a), ValueType::Bool(value_b)) => {
                             Ok(ValueType::Bool(*value_a == *value_b))
                         }
-                        _ => Err(format!(
+                        _ => Err(command_type.gen_err(&format!(
                             "Cannot compare {} with {}",
                             args[0].to_string(),
                             args[1].to_string()
-                        )),
+                        ))),
                     }
                 }
             }
             CommandType::Gt => {
                 if args.len() != 2 {
-                    return Err(format!("command {} must have two arguments", GT));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
                 } else {
                     match (&args[0], &args[1]) {
                         (ValueType::Int(value_a), ValueType::Int(value_b)) => {
@@ -578,13 +533,13 @@ impl Interpreter {
                         (ValueType::Float(value_a), ValueType::Float(value_b)) => {
                             Ok(ValueType::Bool(*value_a > *value_b))
                         }
-                        _ => Err(format!("command {} only works on numbers", GT)),
+                        _ => Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER)),
                     }
                 }
             }
             CommandType::Lt => {
                 if args.len() != 2 {
-                    return Err(format!("command {} must have two arguments", LT));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
                 } else {
                     match (&args[0], &args[1]) {
                         (ValueType::Int(value_a), ValueType::Int(value_b)) => {
@@ -599,60 +554,62 @@ impl Interpreter {
                         (ValueType::Float(value_a), ValueType::Float(value_b)) => {
                             Ok(ValueType::Bool(*value_a < *value_b))
                         }
-                        _ => Err(format!("command {} only works on numbers", LT)),
+                        _ => Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER)),
                     }
                 }
             }
             CommandType::StartsWith => {
                 if args.len() != 2 {
-                    return Err(format!("command {} must have two arguments", STARTS_WITH));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
                 } else {
                     match (&args[0], &args[1]) {
                         (ValueType::Text(value_a), ValueType::Text(value_b)) => {
                             Ok(ValueType::Bool(value_a.starts_with(value_b)))
                         }
-                        _ => Err(format!("command {} only works on text", STARTS_WITH)),
+                        _ => Err(command_type.gen_err(ERROR_ARGS_MUST_BE_TEXT)),
                     }
                 }
             }
             CommandType::EndsWith => {
                 if args.len() != 2 {
-                    return Err(format!("command {} must have two arguments", ENDS_WITH));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
                 } else {
                     match (&args[0], &args[1]) {
                         (ValueType::Text(value_a), ValueType::Text(value_b)) => {
                             Ok(ValueType::Bool(value_a.ends_with(value_b)))
                         }
-                        _ => Err(format!("command {} only works on text", ENDS_WITH)),
+                        _ => Err(command_type.gen_err(ERROR_ARGS_MUST_BE_TEXT)),
                     }
                 }
             }
             CommandType::GetSub => {
                 if args.len() != 1 {
-                    return Err(format!("command {} can only have one argument", GET_SUB));
+                    return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
                 } else {
                     match &args[0] {
                         ValueType::Text(sub) => {
-                            let output =
-                                self.interpolator
-                                    .interp(&("^".to_owned() + sub), &|template| match self
-                                        .db
-                                        .get_random_subs(template)
-                                    {
-                                        Ok(sub) => Some(sub),
-                                        Err(_) => None,
-                                    });
+                            let output = self.interpolator.interp(
+                                &(TEMPLATE_CARROT.to_string() + sub),
+                                &|template| match self.db.get_random_subs(template) {
+                                    Ok(sub) => Some(sub),
+                                    Err(_) => None,
+                                },
+                            );
 
                             match output {
                                 Ok(o) => Ok(ValueType::Text(o)),
                                 Err(e) => Err(e.to_string()),
                             }
                         }
-                        _ => Err(format!(
-                            "first argument of command {} must be of type Text",
-                            GET_SUB
-                        )),
+                        _ => Err(command_type.gen_err(ERROR_ARG_MUST_BE_TEXT)),
                     }
+                }
+            }
+            CommandType::NewLine => {
+                if args.len() != 0 {
+                    Err(command_type.gen_err(ERROR_NO_ARGS))
+                } else {
+                    Ok(ValueType::Text("\n".to_string()))
                 }
             }
         }
@@ -663,6 +620,16 @@ impl Interpreter {
 mod tests {
 
     use crate::interpreter::{parser::ValueType, Interpreter};
+
+    #[test]
+    fn interpret_new_line() {
+        let code = "print(\"hello\", nl(), \"world\")";
+
+        let mut interpreter = Interpreter::new();
+        let output = interpreter.interpret(code).unwrap();
+
+        assert_eq!(output, "hello\nworld");
+    }
 
     #[test]
     fn interpret_get_sub() {

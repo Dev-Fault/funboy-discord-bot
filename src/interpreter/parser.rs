@@ -1,8 +1,3 @@
-// Ideas:
-// boolean types
-// conditionals: if_then(true, do())
-// text functions: if_then(starts_with(paste(noun), "a"), print("an"))
-
 use std::str::FromStr;
 
 use crate::interpreter::lexer::KEYWORD_FALSE;
@@ -13,6 +8,7 @@ use super::lexer::TokenType;
 
 pub const COMMAND_STACK_EXPECT: &str = "Command stack should have at least one command";
 pub const TOKEN_VALUE_EXCEPT: &str = "Token must have value";
+pub const ERR_LOCATION_WIDTH: usize = 3;
 
 pub const ADD: &str = "add";
 pub const SUBTRACT: &str = "sub";
@@ -30,8 +26,6 @@ pub const PASTE: &str = "paste";
 pub const PRINT: &str = "print";
 pub const CONCATENATE: &str = "concat";
 pub const GET_SUB: &str = "get_sub";
-
-// Logic
 pub const IF_THEN: &str = "if_then";
 pub const IF_THEN_ELSE: &str = "if_then_else";
 pub const NOT: &str = "not";
@@ -42,20 +36,9 @@ pub const GT: &str = "gt";
 pub const LT: &str = "lt";
 pub const STARTS_WITH: &str = "starts_with";
 pub const ENDS_WITH: &str = "ends_with";
+pub const NEW_LINE: &str = "nl";
 
-// Logic
-// if_then(condition: bool, action: command) -> evaluated action
-// if_then_else(condition: bool, then_action: command, else_action: command) -> evaluated action
-// not(bool) -> bool
-// and(bool, bool) -> bool
-// or(bool, bool) -> bool
-// eq(value, value) -> bool
-// gt(value: number, value2: number) -> bool
-// lt(value: number, value2: number) -> bool
-// starts_with(self: text, pattern: text) -> bool
-// ends_with(self: text, pattern: text) -> bool
-
-const COMMAND_COUNT: usize = 25;
+const COMMAND_COUNT: usize = 26;
 const COMMANDS: [&str; COMMAND_COUNT] = [
     ADD,
     SUBTRACT,
@@ -82,6 +65,7 @@ const COMMANDS: [&str; COMMAND_COUNT] = [
     STARTS_WITH,
     ENDS_WITH,
     GET_SUB,
+    NEW_LINE,
 ];
 
 #[derive(Debug, PartialEq, Clone)]
@@ -112,6 +96,49 @@ pub enum CommandType {
     StartsWith,
     EndsWith,
     GetSub,
+    NewLine,
+}
+
+impl CommandType {
+    pub fn to_str(&self) -> &str {
+        match self {
+            CommandType::Add => ADD,
+            CommandType::Subtract => SUBTRACT,
+            CommandType::Multiply => MULTIPLY,
+            CommandType::Divide => DIVIDE,
+            CommandType::SelectRandom => SELECT_RANDOM,
+            CommandType::RandomRange => RANDOM_RANGE,
+            CommandType::Capitalize => CAPITALIZE,
+            CommandType::Upper => UPPER,
+            CommandType::Lower => LOWER,
+            CommandType::Repeat => REPEAT,
+            CommandType::Copy => COPY,
+            CommandType::Paste => PASTE,
+            CommandType::Print => PRINT,
+            CommandType::RemoveWhitespace => REMOVE_WHITESPACE,
+            CommandType::Concatenate => CONCATENATE,
+            CommandType::IfThen => IF_THEN,
+            CommandType::IfThenElse => IF_THEN_ELSE,
+            CommandType::Not => NOT,
+            CommandType::And => AND,
+            CommandType::Or => OR,
+            CommandType::Eq => EQ,
+            CommandType::Gt => GT,
+            CommandType::Lt => LT,
+            CommandType::StartsWith => STARTS_WITH,
+            CommandType::EndsWith => ENDS_WITH,
+            CommandType::GetSub => GET_SUB,
+            CommandType::NewLine => NEW_LINE,
+        }
+    }
+
+    pub fn gen_err(&self, description: &str) -> String {
+        format!(
+            "Semantic\nCommand: {}\nDescription: {}",
+            self.to_str(),
+            description
+        )
+    }
 }
 
 impl FromStr for CommandType {
@@ -145,42 +172,9 @@ impl FromStr for CommandType {
             STARTS_WITH => Ok(CommandType::StartsWith),
             ENDS_WITH => Ok(CommandType::EndsWith),
             GET_SUB => Ok(CommandType::GetSub),
+            NEW_LINE => Ok(CommandType::NewLine),
             _ => Err(format!("Invalid command {}", s)),
         }
-    }
-}
-
-impl ToString for CommandType {
-    fn to_string(&self) -> String {
-        match self {
-            CommandType::Add => ADD,
-            CommandType::Subtract => SUBTRACT,
-            CommandType::Multiply => MULTIPLY,
-            CommandType::Divide => DIVIDE,
-            CommandType::SelectRandom => SELECT_RANDOM,
-            CommandType::RandomRange => RANDOM_RANGE,
-            CommandType::Capitalize => CAPITALIZE,
-            CommandType::Upper => UPPER,
-            CommandType::Lower => LOWER,
-            CommandType::Repeat => REPEAT,
-            CommandType::Copy => COPY,
-            CommandType::Paste => PASTE,
-            CommandType::Print => PRINT,
-            CommandType::RemoveWhitespace => REMOVE_WHITESPACE,
-            CommandType::Concatenate => CONCATENATE,
-            CommandType::IfThen => IF_THEN,
-            CommandType::IfThenElse => IF_THEN_ELSE,
-            CommandType::Not => NOT,
-            CommandType::And => AND,
-            CommandType::Or => OR,
-            CommandType::Eq => EQ,
-            CommandType::Gt => GT,
-            CommandType::Lt => LT,
-            CommandType::StartsWith => STARTS_WITH,
-            CommandType::EndsWith => ENDS_WITH,
-            CommandType::GetSub => GET_SUB,
-        }
-        .to_string()
     }
 }
 
@@ -218,7 +212,7 @@ impl ToString for ValueType {
             ValueType::Int(value) => value.to_string(),
             ValueType::Float(value) => value.to_string(),
             ValueType::Identifier(value) => value.to_string(),
-            ValueType::Command(value) => value.command_type.to_string(),
+            ValueType::Command(value) => value.command_type.to_str().to_string(),
             ValueType::Bool(value) => value.to_string(),
             ValueType::None => "".to_string(),
         }
@@ -242,43 +236,76 @@ impl Command {
     }
 }
 
+struct TokenIndex<'a> {
+    index: &'a usize,
+    tokens: &'a Vec<Token>,
+}
+
+impl<'a> TokenIndex<'a> {
+    pub fn comes_after(&self, tokens: &[TokenType]) -> bool {
+        match self.tokens.get(self.index.saturating_sub(1)) {
+            Some(token) => tokens.contains(&token.token_type),
+            None => false,
+        }
+    }
+
+    pub fn comes_before(&self, tokens: &[TokenType]) -> bool {
+        match self.tokens.get(self.index + 1) {
+            Some(token) => tokens.contains(&token.token_type),
+            None => false,
+        }
+    }
+
+    pub fn gen_err(&self, descrption: &str) -> String {
+        let mut err = "Syntax\nLocation: ".to_string();
+
+        let left = self.index.saturating_sub(ERR_LOCATION_WIDTH);
+        let right = match self.index + ERR_LOCATION_WIDTH > self.tokens.len() {
+            true => self.tokens.len(),
+            false => self.index + ERR_LOCATION_WIDTH,
+        };
+
+        for token in &self.tokens[left..right] {
+            err.push_str(&token.value);
+        }
+
+        err.push_str(&format!("\nDescription: {}", descrption.to_string()));
+
+        err
+    }
+}
+
 pub fn parse(tokens: Vec<Token>) -> Result<Vec<Command>, String> {
     let mut commands: Vec<Command> = Vec::new();
 
     let mut command_stack: Vec<Command> = Vec::new();
 
     for (i, token) in tokens.iter().enumerate() {
+        let this = TokenIndex {
+            index: &i,
+            tokens: &tokens,
+        };
+
         match token.token_type {
             TokenType::OpeningQuote => {
-                const VALID_PRECEDENTS: [TokenType; 2] =
-                    [TokenType::Comma, TokenType::OpeningParenthesis];
-
-                if tokens.len() < 1 || !VALID_PRECEDENTS.contains(&tokens[i - 1].token_type) {
-                    return Err(
-                        "Opening quote must come after a comma or opening parenthesis".to_string(),
-                    );
-                } else if command_stack.len() == 0 {
-                    return Err("Opening quote must be inside of a command".to_string());
+                if command_stack.len() == 0 {
+                    return Err(this.gen_err("Opening quote outside of a command"));
+                } else if !this.comes_after(&[TokenType::Comma, TokenType::OpeningParenthesis]) {
+                    return Err(this.gen_err("Misplaced opening quote"));
                 }
             }
             TokenType::ClosingQuote => {
-                const VALID_PROCEDENTS: [TokenType; 2] =
-                    [TokenType::Comma, TokenType::ClosingParenthesis];
-
-                if tokens.len() <= (i + 1) || !VALID_PROCEDENTS.contains(&tokens[i + 1].token_type)
-                {
-                    return Err(
-                        "Closing quote must come before a comma or closing parenthesis".to_string(),
-                    );
-                } else if tokens.len() < 1 || tokens[i - 1].token_type != TokenType::Text {
-                    return Err("Closing quote must come after text".to_string());
-                } else if command_stack.len() == 0 {
-                    return Err("Closing quote must be inside of a command".to_string());
+                if command_stack.len() == 0 {
+                    return Err(this.gen_err("Closing quote outside of a command"));
+                } else if !this.comes_before(&[TokenType::Comma, TokenType::ClosingParenthesis]) {
+                    return Err(this.gen_err("Misplaced closing quote"));
+                } else if !this.comes_after(&[TokenType::Text]) {
+                    return Err(this.gen_err("Misplace closing quote"));
                 }
             }
             TokenType::OpeningParenthesis => {
-                if tokens.len() < 1 || tokens[i - 1].token_type != TokenType::Command {
-                    return Err("Parenthesis must be preceeded by a command".to_string());
+                if !this.comes_after(&[TokenType::Command]) {
+                    return Err(this.gen_err("Opening parenthesis must come after a command"));
                 }
             }
             TokenType::ClosingParenthesis => match command_stack.pop() {
@@ -293,69 +320,56 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Command>, String> {
                             .push(ValueType::Command(command));
                     }
                 }
-                None => return Err("Unmatched parenthesis".to_string()),
+                None => {
+                    return Err(this.gen_err("Closing parenthesis must close a commands arguments"))
+                }
             },
             TokenType::Comma => {
-                if tokens.len() < 1 || command_stack.len() == 0 {
-                    return Err("Comma must be inside a command".to_string());
-                } else if tokens[i - 1].token_type == TokenType::OpeningParenthesis {
-                    return Err("Comma must come after a command parameter".to_string());
+                if command_stack.len() == 0 {
+                    return Err(this.gen_err("Comma outside of a command"));
                 }
             }
             TokenType::Command => {
-                let value = token.value.as_ref().expect(TOKEN_VALUE_EXCEPT).clone();
-
-                if tokens.len() <= (i + 1)
-                    || tokens[i + 1].token_type != TokenType::OpeningParenthesis
-                {
-                    return Err(format!(
-                        "Command [{}] must come before an opening parenthesis",
-                        value
-                    ));
+                if !this.comes_before(&[TokenType::OpeningParenthesis]) {
+                    return Err(this.gen_err("Command must come before opening parenthesis"));
+                } else if token.value.is_empty() {
+                    return Err(this.gen_err("Opening parenthesis must come after a command"));
                 } else {
-                    command_stack.push(Command::from(&value)?);
+                    command_stack.push(Command::from(&token.value)?);
                 }
             }
             TokenType::Text => {
-                let value = token.value.as_ref().expect(TOKEN_VALUE_EXCEPT).clone();
-
-                if tokens.len() < 1 || tokens[i - 1].token_type != TokenType::OpeningQuote {
-                    return Err(format!("Text [{}] must come after an opening quote", value));
-                } else if tokens.len() == i || tokens[i + 1].token_type != TokenType::ClosingQuote {
-                    return Err(format!("Text [{}] must come before a closing quote", value));
-                } else if command_stack.len() == 0 {
-                    return Err(format!("Text [{}] must be inside a command", value));
+                if command_stack.len() == 0 {
+                    return Err(this.gen_err("Text outside of command"));
+                } else if !this.comes_after(&[TokenType::OpeningQuote]) {
+                    return Err(this.gen_err("Text must come after opening quotes"));
+                } else if !this.comes_before(&[TokenType::ClosingQuote]) {
+                    return Err(this.gen_err("Text must come before closing quotes"));
                 } else {
                     command_stack
                         .last_mut()
                         .expect(COMMAND_STACK_EXPECT)
                         .args
-                        .push(ValueType::Text(value));
+                        .push(ValueType::Text(token.value.clone()));
                 }
             }
             TokenType::Number => {
-                const VALID_PRECEDENTS: [TokenType; 2] =
-                    [TokenType::Comma, TokenType::OpeningParenthesis];
-
-                let value = token.value.as_ref().expect(TOKEN_VALUE_EXCEPT).clone();
-
-                if tokens.len() < 1 || !VALID_PRECEDENTS.contains(&tokens[i - 1].token_type) {
-                    dbg!(&tokens[i - 1]);
-                    return Err(format!(
-                        "Number [{}] must come after a comma or opening parenthesis",
-                        value
-                    ));
-                } else if command_stack.len() == 0 {
-                    return Err(format!("Number [{}] must be inside of a command", value));
+                if command_stack.len() == 0 {
+                    return Err(this.gen_err("Number outside of command"));
+                } else if !this.comes_after(&[TokenType::Comma, TokenType::OpeningParenthesis]) {
+                    return Err(this.gen_err("Number outside of command"));
                 } else {
-                    if let Ok(value) = value.parse::<i64>() {
+                    if let Ok(value) = token.value.parse::<i64>() {
                         command_stack
                             .last_mut()
                             .expect(COMMAND_STACK_EXPECT)
                             .args
                             .push(ValueType::Int(value));
                     } else {
-                        let value = value.parse::<f64>().expect("Number must be parsable");
+                        let value = token
+                            .value
+                            .parse::<f64>()
+                            .expect("Number token type must be parsable");
 
                         command_stack
                             .last_mut()
@@ -366,48 +380,29 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Command>, String> {
                 }
             }
             TokenType::Identifier => {
-                const VALID_PRECEDENTS: [TokenType; 2] =
-                    [TokenType::Comma, TokenType::OpeningParenthesis];
-
-                let value = token.value.as_ref().expect(TOKEN_VALUE_EXCEPT).clone();
-
-                if tokens.len() < 1 || !VALID_PRECEDENTS.contains(&tokens[i - 1].token_type) {
-                    return Err(format!(
-                        "Identifier [{}] must come after a comma or opening parenthesis",
-                        value
-                    ));
-                } else if command_stack.len() == 0 {
-                    return Err(format!(
-                        "Identifier [{}] must be inside of a command",
-                        value
-                    ));
+                if command_stack.len() == 0 {
+                    return Err(this.gen_err("Identifier outside of command"));
+                } else if !this.comes_after(&[TokenType::Comma, TokenType::OpeningParenthesis]) {
+                    return Err(this.gen_err("Identifier outside of command"));
                 } else {
                     command_stack
                         .last_mut()
                         .expect(COMMAND_STACK_EXPECT)
                         .args
-                        .push(ValueType::Identifier(value));
+                        .push(ValueType::Identifier(token.value.clone()));
                 }
             }
             TokenType::Keyword => {
-                const VALID_PRECEDENTS: [TokenType; 2] =
-                    [TokenType::Comma, TokenType::OpeningParenthesis];
-
-                let value = token.value.as_ref().expect(TOKEN_VALUE_EXCEPT).clone();
-
-                if tokens.len() < 1 || !VALID_PRECEDENTS.contains(&tokens[i - 1].token_type) {
-                    return Err(format!(
-                        "Keyword [{}] must come after a comma or opening parenthesis",
-                        value
-                    ));
-                } else if command_stack.len() == 0 {
-                    return Err(format!("Keyword [{}] must be inside of a command", value));
+                if command_stack.len() == 0 {
+                    return Err(this.gen_err("Keyword outside of command"));
+                } else if !this.comes_after(&[TokenType::Comma, TokenType::OpeningParenthesis]) {
+                    return Err(this.gen_err("Keyword outside of command"));
                 } else {
-                    let value_type = match &value[..] {
+                    let value_type = match &token.value[..] {
                         KEYWORD_TRUE => ValueType::Bool(true),
                         KEYWORD_FALSE => ValueType::Bool(false),
                         _ => {
-                            return Err(format!("Non existant keyword [{}]", value));
+                            return Err(this.gen_err("Non existant keyword"));
                         }
                     };
 
@@ -422,7 +417,10 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Command>, String> {
     }
 
     if command_stack.len() != 0 {
-        return Err("Unmatched parenthesis".to_string());
+        return Err(format!(
+            "Syntax\nDescription: Missing closing parenthesis within command **{}**",
+            command_stack.last().unwrap().command_type.to_str()
+        ));
     } else {
         Ok(commands)
     }

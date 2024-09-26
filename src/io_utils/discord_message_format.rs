@@ -1,6 +1,6 @@
 use super::quote_filter::QuoteFilter;
 
-const MAX_MESSAGE_SIZE: usize = 2000;
+pub const DISCORD_CHARACTER_LIMIT: usize = 2000;
 const IMAGE_TYPES: [&str; 3] = [".png", ".gif", ".jpg"];
 
 pub fn vectorize_input(input: &str) -> Vec<&str> {
@@ -28,12 +28,12 @@ pub fn split_message(message: &Vec<String>) -> Vec<String> {
     let mut message_part: String = String::default();
 
     while let Some(value) = iter.next() {
-        if message_part.len() + value.len() <= MAX_MESSAGE_SIZE {
+        if message_part.len() + value.len() <= DISCORD_CHARACTER_LIMIT {
             message_part.push_str(value);
         } else {
             message_split.push(message_part);
             message_part = String::default();
-            if value.len() <= MAX_MESSAGE_SIZE {
+            if value.len() <= DISCORD_CHARACTER_LIMIT {
                 message_part.push_str(value);
             } else {
                 for sub_str in split_long_string(value) {
@@ -52,14 +52,14 @@ pub fn split_message(message: &Vec<String>) -> Vec<String> {
 
 pub fn split_long_string<'a>(s: &'a str) -> Vec<&'a str> {
     let mut output = Vec::new();
-    let blocks: usize = s.len() / MAX_MESSAGE_SIZE;
+    let blocks: usize = s.len() / DISCORD_CHARACTER_LIMIT;
 
     for i in 0..blocks {
-        output.push(&s[i * MAX_MESSAGE_SIZE..(i + 1) * MAX_MESSAGE_SIZE]);
+        output.push(&s[i * DISCORD_CHARACTER_LIMIT..(i + 1) * DISCORD_CHARACTER_LIMIT]);
     }
 
-    if blocks * MAX_MESSAGE_SIZE < s.len() {
-        output.push(&s[blocks * MAX_MESSAGE_SIZE..s.len()]);
+    if blocks * DISCORD_CHARACTER_LIMIT < s.len() {
+        output.push(&s[blocks * DISCORD_CHARACTER_LIMIT..s.len()]);
     }
 
     output
@@ -123,7 +123,7 @@ mod tests {
         let split_string = split_long_string(&long_string);
 
         for s in split_string {
-            assert!(s.len() <= super::MAX_MESSAGE_SIZE);
+            assert!(s.len() <= super::DISCORD_CHARACTER_LIMIT);
         }
     }
 
@@ -161,7 +161,7 @@ mod tests {
         message.push(regular_string_4);
 
         for split in split_message(&message) {
-            assert!(split.len() <= super::MAX_MESSAGE_SIZE);
+            assert!(split.len() <= super::DISCORD_CHARACTER_LIMIT);
         }
     }
 }

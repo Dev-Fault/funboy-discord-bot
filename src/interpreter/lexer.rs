@@ -30,7 +30,7 @@ pub enum TokenType {
 #[derive(Debug)]
 pub struct Token {
     pub token_type: TokenType,
-    pub value: Option<String>,
+    pub value: String,
 }
 
 pub fn tokenize(code: &str) -> Vec<Token> {
@@ -78,30 +78,30 @@ pub fn tokenize(code: &str) -> Vec<Token> {
 
                         tokens.push(Token {
                             token_type: TokenType::Text,
-                            value: Some(text),
+                            value: text,
                         });
                         tokens.push(Token {
                             token_type: TokenType::ClosingQuote,
-                            value: None,
+                            value: QUOTE.to_string(),
                         });
                     } else {
                         inside_quote = true;
 
                         tokens.push(Token {
                             token_type: TokenType::OpeningQuote,
-                            value: None,
+                            value: QUOTE.to_string(),
                         });
                     }
                 }
                 OPENING_PARENTHESIS if !inside_quote => {
                     tokens.push(Token {
                         token_type: TokenType::Command,
-                        value: Some(left.trim().to_string()),
+                        value: left.trim().to_string(),
                     });
 
                     tokens.push(Token {
                         token_type: TokenType::OpeningParenthesis,
-                        value: None,
+                        value: OPENING_PARENTHESIS.to_string(),
                     });
                 }
                 CLOSING_PARENTHESIS if !inside_quote => {
@@ -118,13 +118,13 @@ pub fn tokenize(code: &str) -> Vec<Token> {
 
                         tokens.push(Token {
                             token_type,
-                            value: Some(left.trim().to_string()),
+                            value: left.trim().to_string(),
                         });
                     }
 
                     tokens.push(Token {
                         token_type: TokenType::ClosingParenthesis,
-                        value: None,
+                        value: CLOSING_PARENTHESIS.to_string(),
                     });
                 }
                 COMMA if !inside_quote => {
@@ -141,13 +141,13 @@ pub fn tokenize(code: &str) -> Vec<Token> {
 
                         tokens.push(Token {
                             token_type,
-                            value: Some(left.trim().to_string()),
+                            value: left.trim().to_string(),
                         });
                     }
 
                     tokens.push(Token {
                         token_type: TokenType::Comma,
-                        value: None,
+                        value: COMMA.to_string(),
                     });
                 }
                 _ => {
@@ -176,7 +176,7 @@ fn get_symbol<'a>(code: &str, symbols: &[&'a str]) -> Option<&'a str> {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::lexer::{tokenize, TokenType};
+    use crate::interpreter::lexer::{tokenize, TokenType, OPENING_PARENTHESIS};
 
     #[test]
     fn standard_tokens() {
@@ -185,52 +185,42 @@ mod tests {
         let tokens = tokenize(code);
 
         assert_eq!(tokens[0].token_type, TokenType::Command);
-        assert_eq!(tokens[0].value, Some("add".to_string()));
+        assert_eq!(tokens[0].value, "add".to_string());
 
         assert_eq!(tokens[1].token_type, TokenType::OpeningParenthesis);
-        assert_eq!(tokens[1].value, None);
 
         assert_eq!(tokens[2].token_type, TokenType::OpeningQuote);
-        assert_eq!(tokens[2].value, None);
 
         assert_eq!(tokens[3].token_type, TokenType::Text);
-        assert_eq!(tokens[3].value, Some("'noun".to_string()));
+        assert_eq!(tokens[3].value, "'noun".to_string());
 
         assert_eq!(tokens[4].token_type, TokenType::ClosingQuote);
-        assert_eq!(tokens[4].value, None);
 
         assert_eq!(tokens[5].token_type, TokenType::Comma);
-        assert_eq!(tokens[5].value, None);
 
         assert_eq!(tokens[6].token_type, TokenType::OpeningQuote);
-        assert_eq!(tokens[6].value, None);
 
         assert_eq!(tokens[7].token_type, TokenType::Text);
-        assert_eq!(tokens[7].value, Some("'puncuation".to_string()));
+        assert_eq!(tokens[7].value, "'puncuation".to_string());
 
         assert_eq!(tokens[8].token_type, TokenType::ClosingQuote);
-        assert_eq!(tokens[8].value, None);
 
         assert_eq!(tokens[9].token_type, TokenType::ClosingParenthesis);
-        assert_eq!(tokens[9].value, None);
 
         assert_eq!(tokens[10].token_type, TokenType::Command);
-        assert_eq!(tokens[10].value, Some("multiply".to_string()));
+        assert_eq!(tokens[10].value, "multiply".to_string());
 
         assert_eq!(tokens[11].token_type, TokenType::OpeningParenthesis);
-        assert_eq!(tokens[11].value, None);
 
         assert_eq!(tokens[12].token_type, TokenType::Number);
-        assert_eq!(tokens[12].value, Some("2".to_string()));
+        assert_eq!(tokens[12].value, "2".to_string());
 
         assert_eq!(tokens[13].token_type, TokenType::Comma);
-        assert_eq!(tokens[13].value, None);
 
         assert_eq!(tokens[14].token_type, TokenType::Identifier);
-        assert_eq!(tokens[14].value, Some("identifier".to_string()));
+        assert_eq!(tokens[14].value, "identifier".to_string());
 
         assert_eq!(tokens[15].token_type, TokenType::ClosingParenthesis);
-        assert_eq!(tokens[15].value, None);
 
         // dbg!(tokens);
     }
@@ -241,7 +231,7 @@ mod tests {
         let tokens = tokenize(code);
         dbg!(&tokens[3]);
         assert_eq!(tokens[3].token_type, TokenType::Text);
-        assert_eq!(tokens[3].value, Some("\"qu\"o\"te\"".to_string()));
+        assert_eq!(tokens[3].value, "\"qu\"o\"te\"".to_string());
     }
 
     #[test]
@@ -251,25 +241,21 @@ mod tests {
         let tokens = tokenize(code);
 
         assert_eq!(tokens[0].token_type, TokenType::Command);
-        assert_eq!(tokens[0].value, Some("print".to_string()));
+        assert_eq!(tokens[0].value, "print".to_string());
 
         assert_eq!(tokens[1].token_type, TokenType::OpeningParenthesis);
-        assert_eq!(tokens[1].value, None);
 
         assert_eq!(tokens[2].token_type, TokenType::OpeningQuote);
-        assert_eq!(tokens[2].value, None);
 
         assert_eq!(tokens[3].token_type, TokenType::Text);
         assert_eq!(
             tokens[3].value,
-            Some(" example of, some, (), symbols \" inside, of quotes ".to_string())
+            " example of, some, (), symbols \" inside, of quotes ".to_string()
         );
 
         assert_eq!(tokens[4].token_type, TokenType::ClosingQuote);
-        assert_eq!(tokens[4].value, None);
 
         assert_eq!(tokens[5].token_type, TokenType::ClosingParenthesis);
-        assert_eq!(tokens[5].value, None);
 
         // dbg!(tokens);
     }
@@ -279,15 +265,13 @@ mod tests {
         let code = "print(true)";
         let tokens = tokenize(code);
         assert_eq!(tokens[0].token_type, TokenType::Command);
-        assert_eq!(tokens[0].value, Some("print".to_string()));
+        assert_eq!(tokens[0].value, "print".to_string());
 
         assert_eq!(tokens[1].token_type, TokenType::OpeningParenthesis);
-        assert_eq!(tokens[1].value, None);
 
         assert_eq!(tokens[2].token_type, TokenType::Keyword);
-        assert_eq!(tokens[2].value, Some("true".to_string()));
+        assert_eq!(tokens[2].value, "true".to_string());
 
         assert_eq!(tokens[3].token_type, TokenType::ClosingParenthesis);
-        assert_eq!(tokens[3].value, None);
     }
 }
