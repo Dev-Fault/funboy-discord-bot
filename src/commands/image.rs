@@ -27,7 +27,7 @@ pub async fn search_image(ctx: Context<'_>, query: String) -> Result<(), Error> 
             .await?;
     } else {
         let i = random::get_random_exclusive(0, images.len());
-        ctx.say_ephemeral(&images[i].link).await?;
+        ctx.say(&images[i].link).await?;
     }
 
     Ok(())
