@@ -36,7 +36,7 @@ pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Res
         ctx.say_ephemeral(ERROR_TEMPLATE_TOO_LARGE).await?;
         return Ok(());
     } else if template.contains(|c: char| !c.is_alphanumeric()) {
-        ctx.say(ERROR_INVALID_TEMPLATE_NAME).await?;
+        ctx.say_ephemeral(ERROR_INVALID_TEMPLATE_NAME).await?;
         return Ok(());
     }
 
@@ -53,7 +53,7 @@ pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Res
 
     match db.insert_subs(&template, Some(&subs)) {
         Err(e) => {
-            ctx.say(e.to_string()).await?;
+            ctx.say_ephemeral(&e.to_string()).await?;
         }
         Ok(inserted_subs) => {
             let output_log = OutputLog::from(subs, inserted_subs);
@@ -73,7 +73,7 @@ pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Res
                         "Substitutes [{}] are already present under template **\"**{}**\"**.",
                         &output_log.not_present, &template
                     )[..],
-                    false,
+                    true,
                 )
                 .await?;
             }
@@ -465,7 +465,7 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
             };
         }
         Err(_) => {
-            ctx.say_ephemeral(ERROR_GENERATION_FAILED).await?;
+            ctx.say(ERROR_GENERATION_FAILED).await?;
         }
     }
 
