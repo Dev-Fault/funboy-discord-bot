@@ -1,3 +1,4 @@
+use std::mem::size_of;
 use std::str::FromStr;
 
 use crate::interpreter::lexer::KEYWORD_FALSE;
@@ -197,10 +198,23 @@ impl ValueType {
             _ => None,
         }
     }
+
     pub fn extract_int(&self) -> Option<i64> {
         match self {
             ValueType::Int(value) => Some(*value),
             _ => None,
+        }
+    }
+
+    pub fn get_size(&self) -> usize {
+        match self {
+            ValueType::Text(value) => size_of::<ValueType>() + value.capacity(),
+            ValueType::Int(_) => size_of::<ValueType>(),
+            ValueType::Float(_) => size_of::<ValueType>(),
+            ValueType::Bool(_) => size_of::<ValueType>(),
+            ValueType::Identifier(value) => size_of::<ValueType>() + value.capacity(),
+            ValueType::Command(_) => size_of::<ValueType>(),
+            ValueType::None => size_of::<ValueType>(),
         }
     }
 }

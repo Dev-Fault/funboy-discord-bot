@@ -6,7 +6,7 @@ use super::discord_message_format::{
     format_output_vector, split_long_string, split_message, DISCORD_CHARACTER_LIMIT,
 };
 
-const MESSAGE_BYTE_LIMIT: usize = DISCORD_CHARACTER_LIMIT * 4;
+pub const MESSAGE_BYTE_LIMIT: usize = DISCORD_CHARACTER_LIMIT * 4;
 pub const WARN_MESSAGE_SIZE_EXCEEDED: &str = "Message was too large to send.";
 pub const WARN_EMPTY_MESSAGE: &str = "Message was empty.";
 

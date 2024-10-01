@@ -5,14 +5,16 @@ use std::collections::HashMap;
 use template_substitution_database::TemplateDatabase;
 use text_interpolator::{defaults::TEMPLATE_CARROT, TextInterpolator};
 
-use crate::FUNBOY_DB_PATH;
+use crate::{io_utils::context_extension::MESSAGE_BYTE_LIMIT, FUNBOY_DB_PATH};
 
 #[allow(dead_code)]
 mod lexer;
 #[allow(dead_code)]
 mod parser;
 
-const REPEAT_LIMIT: u16 = 100;
+const REPEAT_LIMIT: u16 = u16::MAX;
+const VAR_MAP_BYTE_LIMIT: usize = 65535 * 100;
+const OUTPUT_BYTE_LIMIT: usize = MESSAGE_BYTE_LIMIT;
 
 const ERROR_NO_ARGS: &str = "takes no arguments";
 const ERROR_TWO_OR_MORE_ARGS: &str = "must have two or more arguments";
@@ -35,10 +37,41 @@ const ERROR_ARG_TWO_MUST_BE_IDENTIFIER: &str = "second argument must be of type 
 const ERROR_UNKNOWN_IDENTIFIER: &str = "No identifier exists named";
 
 #[derive(Debug)]
+pub struct VarMap {
+    data: HashMap<String, ValueType>,
+    size: usize,
+}
+
+impl VarMap {
+    pub fn new() -> Self {
+        VarMap {
+            data: HashMap::new(),
+            size: 0,
+        }
+    }
+
+    pub fn insert_var(&mut self, name: String, value: ValueType) -> Result<(), String> {
+        if self.size.saturating_add(value.get_size()) <= VAR_MAP_BYTE_LIMIT {
+            self.data.insert(name, value);
+            Ok(())
+        } else {
+            Err(format!(
+                "interpreter memory limit of {} bytes exceeded",
+                VAR_MAP_BYTE_LIMIT
+            ))
+        }
+    }
+
+    pub fn get_var(&mut self, name: &String) -> Option<&mut ValueType> {
+        self.data.get_mut(name)
+    }
+}
+
+#[derive(Debug)]
 pub struct Interpreter {
-    vars: HashMap<String, ValueType>,
-    log: Vec<ValueType>,
+    vars: VarMap,
     output: String,
+    log: Vec<ValueType>,
     db: TemplateDatabase,
     interpolator: TextInterpolator,
 }
@@ -46,9 +79,9 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         Self {
-            vars: HashMap::new(),
-            log: Vec::new(),
+            vars: VarMap::new(),
             output: String::new(),
+            log: Vec::new(),
             db: TemplateDatabase::from_path(FUNBOY_DB_PATH)
                 .expect("Funboy database failed to load."),
             interpolator: TextInterpolator::default(),
@@ -56,6 +89,16 @@ impl Interpreter {
     }
 
     pub fn interpret(&mut self, code: &str) -> Result<String, String> {
+        let commands = parse(tokenize(code))?;
+
+        for command in commands {
+            self.eval_command(command)?;
+        }
+
+        Ok(self.output.drain(..).collect())
+    }
+
+    pub fn interpret_and_log(&mut self, code: &str) -> Result<String, String> {
         let commands = parse(tokenize(code))?;
 
         for command in commands {
@@ -326,7 +369,7 @@ impl Interpreter {
                             for _i in 0..*value {
                                 for arg in &args[1..args.len()] {
                                     if let ValueType::Command(command) = arg {
-                                        let _ = self.eval_command(command.clone());
+                                        self.eval_command(command.clone())?;
                                     } else {
                                         return Err(command_type
                                             .gen_err(ERROR_ARGS_AFTER_ARG_ONE_MUST_BE_COMMAND));
@@ -354,8 +397,15 @@ impl Interpreter {
                                 Err(command_type.gen_err(ERROR_ARG_ONE_MUST_NOT_BE_NONE))
                             }
                             _ => {
-                                self.vars.insert(identifier.to_string(), args[0].clone());
-                                return Ok(ValueType::None);
+                                match self
+                                    .vars
+                                    .insert_var(identifier.to_string(), args[0].clone())
+                                {
+                                    Ok(_) => return Ok(ValueType::None),
+                                    Err(e) => {
+                                        return Err(e);
+                                    }
+                                }
                             }
                         }
                     } else {
@@ -368,7 +418,7 @@ impl Interpreter {
                     return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
                 } else {
                     match &args[0] {
-                        ValueType::Identifier(identifier) => match self.vars.get(identifier) {
+                        ValueType::Identifier(identifier) => match self.vars.get_var(identifier) {
                             Some(value) => Ok(value.clone()),
                             None => Err(command_type.gen_err(&format!(
                                 "{} **{}**",
@@ -381,8 +431,19 @@ impl Interpreter {
             }
             CommandType::Print => {
                 for arg in args {
-                    self.output.push_str(&arg.to_string());
+                    let arg_string = arg.to_string();
+                    if self.output.capacity().saturating_add(arg_string.capacity())
+                        <= OUTPUT_BYTE_LIMIT
+                    {
+                        self.output.push_str(&arg_string);
+                    } else {
+                        return Err(format!(
+                            "Output byte limit of {} bytes exceeded",
+                            OUTPUT_BYTE_LIMIT
+                        ));
+                    }
                 }
+
                 Ok(ValueType::None)
             }
             CommandType::RemoveWhitespace => {
@@ -398,13 +459,13 @@ impl Interpreter {
                 }
             }
             CommandType::Concatenate => {
-                let mut output = String::new();
+                let mut concatenation = String::new();
 
                 for arg in args {
-                    output.push_str(&arg.to_string());
+                    concatenation.push_str(&arg.to_string());
                 }
 
-                Ok(ValueType::Text(output))
+                Ok(ValueType::Text(concatenation))
             }
             CommandType::IfThen => {
                 if args.len() != 2 {
@@ -648,7 +709,7 @@ mod tests {
         let code = "repeat(5, print(\"hello \"))";
 
         let mut interpreter = Interpreter::new();
-        let output = interpreter.interpret(code).unwrap();
+        let output = interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::None);
         assert_eq!(output, "hello hello hello hello hello ");
@@ -659,7 +720,7 @@ mod tests {
         let code = "if_then(true, \"true\") if_then(false, \"false\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("true".to_string()));
         assert_eq!(interpreter.log[1], ValueType::None);
@@ -670,7 +731,7 @@ mod tests {
         let code = "if_then_else(false, \"true\", \"false\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("false".to_string()));
     }
@@ -680,7 +741,7 @@ mod tests {
         let code = "if_then_else(not(false), \"true\", \"false\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("true".to_string()));
     }
@@ -690,7 +751,7 @@ mod tests {
         let code = "if_then_else(and(true, false), \"true\", \"false\") if_then_else(and(true, true), \"true\", \"false\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("false".to_string()));
         assert_eq!(interpreter.log[1], ValueType::Text("true".to_string()));
@@ -701,7 +762,7 @@ mod tests {
         let code = "if_then_else(or(true, false), \"true\", \"false\") if_then_else(or(true, true), \"true\", \"false\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("true".to_string()));
         assert_eq!(interpreter.log[1], ValueType::Text("true".to_string()));
@@ -712,7 +773,7 @@ mod tests {
         let code = "if_then_else(eq(1, 1), \"true\", \"false\") if_then_else(eq(1, 2), \"true\", \"false\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("true".to_string()));
         assert_eq!(interpreter.log[1], ValueType::Text("false".to_string()));
@@ -723,7 +784,7 @@ mod tests {
         let code = "if_then_else(gt(1, 1), \"true\", \"false\") if_then_else(gt(2, 1), \"true\", \"false\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("false".to_string()));
         assert_eq!(interpreter.log[1], ValueType::Text("true".to_string()));
@@ -734,7 +795,7 @@ mod tests {
         let code = "if_then_else(lt(1, 1), \"true\", \"false\") if_then_else(lt(1, 2), \"true\", \"false\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("false".to_string()));
         assert_eq!(interpreter.log[1], ValueType::Text("true".to_string()));
@@ -745,7 +806,7 @@ mod tests {
         let code = "if_then_else(starts_with(\"apple\", \"a\"), \"true\", \"false\") if_then_else(starts_with(\"apple\", \"b\"), \"true\", \"false\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("true".to_string()));
         assert_eq!(interpreter.log[1], ValueType::Text("false".to_string()));
@@ -756,7 +817,7 @@ mod tests {
         let code = "if_then_else(ends_with(\"apple\", \"e\"), \"true\", \"false\") if_then_else(ends_with(\"apple\", \"b\"), \"true\", \"false\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("true".to_string()));
         assert_eq!(interpreter.log[1], ValueType::Text("false".to_string()));
@@ -767,7 +828,7 @@ mod tests {
         let code = "add(5, 5) add(5.1, 5.2) add(1.0, 1.0) add(1.0, 1)";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Int(10));
         assert_eq!(interpreter.log[1], ValueType::Float(10.3));
@@ -780,7 +841,7 @@ mod tests {
         let code = "sub(-5, 5, -2) sub(4.2, 1.2) sub(1.0, 1.0) sub(1.0, 1)";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Int(-8));
         let value = interpreter.log[1].extract_float().unwrap();
@@ -794,7 +855,7 @@ mod tests {
         let code = "mul(2, 5) mul(2.0, 5)";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Int(10));
         assert_eq!(interpreter.log[1], ValueType::Float(10.0));
@@ -805,7 +866,7 @@ mod tests {
         let code = "div(2, 3) div(3, 2) div (5.0, 2.5)";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Int(0));
         assert_eq!(interpreter.log[1], ValueType::Int(1));
@@ -828,7 +889,7 @@ mod tests {
         let code = "concat(5, \"text\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("5text".to_string()));
     }
@@ -838,16 +899,16 @@ mod tests {
         let code = "capitalize(\"text\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("Text".to_string()));
 
         let code = "capitalize(\"t\")";
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
         assert_eq!(interpreter.log[1], ValueType::Text("T".to_string()));
 
         let code = "capitalize(\"\")";
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
         assert_eq!(interpreter.log[2], ValueType::Text("".to_string()));
     }
 
@@ -856,7 +917,7 @@ mod tests {
         let code = "upper(\"text\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("TEXT".to_string()));
     }
@@ -866,7 +927,7 @@ mod tests {
         let code = "lower(\"TEXT\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(interpreter.log[0], ValueType::Text("text".to_string()));
     }
@@ -876,7 +937,7 @@ mod tests {
         let code = "remove_whitespace(\"text with whitespace removed\")";
 
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         assert_eq!(
             interpreter.log[0],
@@ -898,7 +959,7 @@ mod tests {
     fn interpret_random_range_int() {
         let code = "random_range(5, 10)";
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         match interpreter.log[0] {
             ValueType::Int(value) => {
@@ -912,7 +973,7 @@ mod tests {
     fn interpret_random_range_float() {
         let code = "random_range(5.0, 10)";
         let mut interpreter = Interpreter::new();
-        interpreter.interpret(code).unwrap();
+        interpreter.interpret_and_log(code).unwrap();
 
         match interpreter.log[0] {
             ValueType::Float(value) => {
