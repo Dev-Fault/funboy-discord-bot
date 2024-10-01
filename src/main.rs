@@ -22,6 +22,7 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 pub struct Data {
     pub template_db: Mutex<TemplateDatabase>,
     pub track_list: Arc<Mutex<TrackList>>,
+    pub imgur_client_id: Arc<String>,
 } // User data, which is stored and accessible in all command invocations
 
 struct HttpKey;
@@ -37,7 +38,9 @@ enum CustomComponent {
 
 #[tokio::main]
 async fn main() {
-    let token = std::env::var("DISCORD_TOKEN").expect("missing DISCORD_TOKEN");
+    let token = std::env::var("DISCORD_TOKEN").expect("must have DISCORD_TOKEN");
+    let imgur_client_id = std::env::var("IMGUR_CLIENT_ID").expect("must have IMGUR_CLIENT_ID");
+
     let intents = GatewayIntents::non_privileged();
 
     let framework = poise::Framework::builder()
@@ -63,6 +66,7 @@ async fn main() {
                 commands::sound::play_track(),
                 commands::sound::stop_tracks(),
                 commands::sound::list_tracks(),
+                commands::image::search_image(),
             ],
             event_handler: |ctx, event, _framework_ctx, data| {
                 Box::pin(async move {
@@ -97,6 +101,7 @@ async fn main() {
                             .expect("Failed to load funboy database."),
                     ),
                     track_list: Mutex::new(TrackList::new()).into(),
+                    imgur_client_id: Arc::new(imgur_client_id),
                 })
             })
         })

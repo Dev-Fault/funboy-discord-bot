@@ -1,7 +1,8 @@
 use crate::{
     interpreter::Interpreter,
     io_utils::{
-        change_log::OutputLog, context_extension::ContextExtension,
+        change_log::OutputLog,
+        context_extension::{ContextExtension, MESSAGE_BYTE_LIMIT},
         discord_message_format::vectorize_input,
     },
     Context, Error,
@@ -10,11 +11,15 @@ use crate::{
 use template_substitution_database::rusqlite;
 use text_interpolator::TextInterpolator;
 
-const TEMPLATE_NAME_ERROR: &str = "Error: templates may only contain letters and numbers.";
-const NO_TEMPLATE_ERROR: &str =
+const INPUT_BYTE_LIMIT: usize = MESSAGE_BYTE_LIMIT;
+
+const ERROR_INVALID_TEMPLATE_NAME: &str = "Error: templates may only contain letters and numbers.";
+const ERROR_NO_TEMPLATES: &str =
     "Error: There are currently no templates. Try creaing some with /add";
-const DB_ERROR: &str = "Error: There was a problem querying the database.";
-const GENERATION_FAILED_ERROR: &str = "Error: Text generation failed.";
+const ERROR_DATABASE_QUERY: &str = "Error: There was a problem querying the database.";
+const ERROR_GENERATION_FAILED: &str = "Error: Text generation failed.";
+const ERROR_TEMPLATE_TOO_LARGE: &str = "Error: Template was too large.";
+const ERROR_SUB_TOO_LARGE: &str = "Error: Substitute was too large.";
 
 /// Adds multiple substitutes to a template.
 ///
@@ -27,21 +32,31 @@ const GENERATION_FAILED_ERROR: &str = "Error: Text generation failed.";
 /// Example usage: **/add** template: **fruit** substitutes: **apple banana orange "dragon fruit" "key lime"**
 #[poise::command(slash_command, prefix_command)]
 pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Result<(), Error> {
-    if template.contains(|c: char| !c.is_alphanumeric()) {
-        ctx.say(TEMPLATE_NAME_ERROR).await?;
+    if template.len() > INPUT_BYTE_LIMIT {
+        ctx.say_ephemeral(ERROR_TEMPLATE_TOO_LARGE).await?;
+        return Ok(());
+    } else if template.contains(|c: char| !c.is_alphanumeric()) {
+        ctx.say(ERROR_INVALID_TEMPLATE_NAME).await?;
         return Ok(());
     }
 
     let mut db = ctx.data().template_db.lock().await;
 
-    let subs_to_insert: Vec<&str> = vectorize_input(substitutes.as_str());
+    let subs: Vec<&str> = vectorize_input(substitutes.as_str());
 
-    match db.insert_subs(&template, Some(&subs_to_insert)) {
+    for sub in &subs {
+        if sub.len() > INPUT_BYTE_LIMIT {
+            ctx.say_ephemeral(ERROR_SUB_TOO_LARGE).await?;
+            return Ok(());
+        }
+    }
+
+    match db.insert_subs(&template, Some(&subs)) {
         Err(e) => {
             ctx.say(e.to_string()).await?;
         }
         Ok(inserted_subs) => {
-            let output_log = OutputLog::from(subs_to_insert, inserted_subs);
+            let output_log = OutputLog::from(subs, inserted_subs);
 
             ctx.multi_say(
                 &format!(
@@ -81,7 +96,13 @@ pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Res
 #[poise::command(slash_command, prefix_command)]
 pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> Result<(), Error> {
     if template.contains(|c: char| !c.is_alphanumeric()) {
-        ctx.say(TEMPLATE_NAME_ERROR).await?;
+        ctx.say_ephemeral(ERROR_INVALID_TEMPLATE_NAME).await?;
+        return Ok(());
+    } else if template.len() > INPUT_BYTE_LIMIT {
+        ctx.say_ephemeral(ERROR_TEMPLATE_TOO_LARGE).await?;
+        return Ok(());
+    } else if substitute.len() > INPUT_BYTE_LIMIT {
+        ctx.say_ephemeral(ERROR_SUB_TOO_LARGE).await?;
         return Ok(());
     }
 
@@ -89,7 +110,7 @@ pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> 
 
     match db.insert_sub(&template, &substitute) {
         Err(e) => {
-            ctx.say(e.to_string()).await?;
+            ctx.say_ephemeral(&e.to_string()).await?;
         }
         Ok(result) => {
             if result {
@@ -107,7 +128,7 @@ pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> 
                         "Substitute **\"**{}**\"** is already present under template **\"**{}**\"**.",
                         &substitute, &template
                     )[..],
-                    false,
+                    true,
                 )
                 .await?;
             }
@@ -132,14 +153,14 @@ pub async fn remove_template(ctx: Context<'_>, template: String) -> Result<(), E
     match db.remove_template(&template) {
         Err(e) => match e {
             rusqlite::Error::QueryReturnedNoRows => {
-                ctx.say(format!(
+                ctx.say_ephemeral(&format!(
                     "No template named **\"**{}**\"** exists.",
                     &template
                 ))
                 .await?;
             }
             _ => {
-                ctx.say(e.to_string()).await?;
+                ctx.say_ephemeral(&e.to_string()).await?;
             }
         },
         Ok(result) => {
@@ -147,7 +168,7 @@ pub async fn remove_template(ctx: Context<'_>, template: String) -> Result<(), E
                 ctx.say(format!("Removed template **\"**{}**\"**.", &template))
                     .await?;
             } else {
-                ctx.say(format!(
+                ctx.say_ephemeral(&format!(
                     "No template named **\"**{}**\"** exists.",
                     &template
                 ))
@@ -176,14 +197,14 @@ pub async fn remove_sub(
     match db.remove_sub(&template, &substitute) {
         Err(e) => match e {
             rusqlite::Error::QueryReturnedNoRows => {
-                ctx.say(format!(
+                ctx.say_ephemeral(&format!(
                     "No template named **\"**{}**\"** exists.",
                     &template
                 ))
                 .await?;
             }
             _ => {
-                ctx.say(e.to_string()).await?;
+                ctx.say_ephemeral(&e.to_string()).await?;
             }
         },
         Ok(result) => {
@@ -202,7 +223,7 @@ pub async fn remove_sub(
                         "Substitute **\"**{}**\"** was not found in template **\"**{}**\"**.",
                         &substitute, &template
                     )[..],
-                    false,
+                    true,
                 )
                 .await?;
             }
@@ -231,14 +252,14 @@ pub async fn remove_subs(
     match db.remove_subs(&template, &subs_to_remove) {
         Err(e) => match e {
             rusqlite::Error::QueryReturnedNoRows => {
-                ctx.say(format!(
+                ctx.say_ephemeral(&format!(
                     "No template named **\"**{}**\"** exists.",
                     &template
                 ))
                 .await?;
             }
             _ => {
-                ctx.say(e.to_string()).await?;
+                ctx.say_ephemeral(&e.to_string()).await?;
             }
         },
         Ok(removed_subs) => {
@@ -257,7 +278,7 @@ pub async fn remove_subs(
                         "Substitutes [{}] were not found in template **\"**{}**\"**.",
                         output_log.not_present, &template
                     )[..],
-                    false,
+                    true,
                 )
                 .await?;
             }
@@ -282,17 +303,22 @@ pub async fn replace_sub(
 ) -> Result<(), Error> {
     let mut db = ctx.data().template_db.lock().await;
 
+    if new_sub.len() > INPUT_BYTE_LIMIT {
+        ctx.say_ephemeral(ERROR_SUB_TOO_LARGE).await?;
+        return Ok(());
+    }
+
     match db.rename_substitute(&template, &old_sub, &new_sub) {
         Err(e) => match e {
             rusqlite::Error::QueryReturnedNoRows => {
-                ctx.say(format!(
+                ctx.say_ephemeral(&format!(
                     "No template named **\"**{}**\"** exists.",
                     &template
                 ))
                 .await?;
             }
             _ => {
-                ctx.say(e.to_string()).await?;
+                ctx.say_ephemeral(&e.to_string()).await?;
             }
         },
         Ok(result) => {
@@ -311,7 +337,7 @@ pub async fn replace_sub(
                         "No substitute exists in template **\"**{}**\"** named **\"**{}**\"**.",
                         &template, &old_sub
                     )[..],
-                    false,
+                    true,
                 )
                 .await?;
             }
@@ -330,7 +356,10 @@ pub async fn replace_sub(
 pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Result<(), Error> {
     if from.contains(|c: char| !c.is_alphanumeric()) || to.contains(|c: char| !c.is_alphanumeric())
     {
-        ctx.say(TEMPLATE_NAME_ERROR).await?;
+        ctx.say_ephemeral(ERROR_INVALID_TEMPLATE_NAME).await?;
+        return Ok(());
+    } else if to.len() > INPUT_BYTE_LIMIT {
+        ctx.say_ephemeral(ERROR_TEMPLATE_TOO_LARGE).await?;
         return Ok(());
     }
 
@@ -338,7 +367,7 @@ pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Resu
 
     match db.rename_template(&from, &to) {
         Err(e) => {
-            ctx.say(e.to_string()).await?;
+            ctx.say_ephemeral(&e.to_string()).await?;
         }
         Ok(result) => {
             if result {
@@ -348,7 +377,7 @@ pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Resu
                 ))
                 .await?;
             } else {
-                ctx.say(format!("No template named **\"**{}**\"** exists.", &from))
+                ctx.say_ephemeral(&format!("No template named **\"**{}**\"** exists.", &from))
                     .await?;
             }
         }
@@ -392,13 +421,13 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
         None => match db.get_templates() {
             Ok(tmps) => {
                 if tmps.is_empty() {
-                    ctx.say_ephemeral(NO_TEMPLATE_ERROR).await?;
+                    ctx.say_ephemeral(ERROR_NO_TEMPLATES).await?;
                 } else {
                     ctx.say_vec(tmps, true).await?;
                 }
             }
             _ => {
-                ctx.say_ephemeral(DB_ERROR).await?;
+                ctx.say_ephemeral(ERROR_DATABASE_QUERY).await?;
             }
         },
     }
@@ -436,7 +465,7 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
             };
         }
         Err(_) => {
-            ctx.say(GENERATION_FAILED_ERROR).await?;
+            ctx.say_ephemeral(ERROR_GENERATION_FAILED).await?;
         }
     }
 

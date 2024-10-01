@@ -9,7 +9,8 @@ text_interpolator = { path = "/home/dustin/Documents/developer/rust_programs/tex
 poise = "0.6.1"
 tokio = {version = "1.39.2", features = ["full"]}
 rand = "0.8.5"
-reqwest = "0.11"
+reqwest = {version = "0.11", features = ["json"]}
+serde = "1.0.210"
 
 [dependencies.serenity]
 default-features = false

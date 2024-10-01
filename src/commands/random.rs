@@ -33,7 +33,7 @@ fn get_random_result<T: FromStr + PartialOrd + SampleUniform + ToString>(
     max: String,
 ) -> Result<String, &'static str> {
     match (min.parse(), max.parse()) {
-        (Ok(min), Ok(max)) => Ok(get_random::<T>(min, max).to_string()),
+        (Ok(min), Ok(max)) => Ok(get_random_inclusive::<T>(min, max).to_string()),
         _ => Err("Error: min and max values must be a number."),
     }
 }
@@ -50,13 +50,18 @@ pub async fn random_word(ctx: Context<'_>, words: String) -> Result<(), Error> {
         ctx.say(format!("Error: enter at least two entries."))
             .await?;
     } else {
-        let output = input[get_random(0, input.len() - 1)];
+        let output = input[get_random_inclusive(0, input.len() - 1)];
         ctx.say(output).await?;
     }
     Ok(())
 }
 
-fn get_random<T: SampleUniform + PartialOrd>(min: T, max: T) -> T {
+pub fn get_random_inclusive<T: SampleUniform + PartialOrd>(min: T, max: T) -> T {
+    let mut rng = rand::thread_rng();
+    rng.gen_range(min..=max)
+}
+
+pub fn get_random_exclusive<T: SampleUniform + PartialOrd>(min: T, max: T) -> T {
     let mut rng = rand::thread_rng();
     rng.gen_range(min..=max)
 }
