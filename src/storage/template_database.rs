@@ -15,6 +15,13 @@ pub struct TemplateDatabase {
     db: Connection,
 }
 
+#[derive(Debug)]
+pub struct SubstituteRecord {
+    pub id: i32,
+    pub name: String,
+    pub template_id: i32,
+}
+
 pub type UpdatedValues<'a> = Vec<&'a str>;
 
 impl TemplateDatabase {
@@ -252,6 +259,20 @@ impl TemplateDatabase {
         Ok(result > 0)
     }
 
+    pub fn remove_sub_by_id<'a>(&mut self, template: &'a str, id: usize) -> rusqlite::Result<bool> {
+        let tx = self.db.transaction()?;
+        let template_id = Self::find_template_id_with_transaction(&tx, template)?;
+
+        let result = tx.execute(
+            "DELETE FROM substitutes WHERE id = ?2",
+            &[&template_id, &id.to_string()],
+        )?;
+
+        tx.commit()?;
+
+        Ok(result > 0)
+    }
+
     pub fn remove_subs<'a>(
         &mut self,
         template: &'a str,
@@ -324,7 +345,7 @@ impl TemplateDatabase {
         Ok(result > 0)
     }
 
-    pub fn rename_substitute(
+    pub fn replace_substitute(
         &mut self,
         template: &str,
         old_sub: &str,
@@ -344,6 +365,26 @@ impl TemplateDatabase {
         Ok(result > 0)
     }
 
+    pub fn replace_substitute_by_id(
+        &mut self,
+        template: &str,
+        id: usize,
+        new_sub: &str,
+    ) -> rusqlite::Result<bool> {
+        let tx = self.db.transaction()?;
+
+        let template_id = Self::find_template_id_with_transaction(&tx, template)?;
+
+        let result = tx.execute(
+            "UPDATE substitutes SET name = ?1 WHERE id = ?2",
+            &[new_sub, &id.to_string(), &template_id],
+        )?;
+
+        tx.commit()?;
+
+        Ok(result > 0)
+    }
+
     pub fn clear(&self) -> rusqlite::Result<()> {
         self.db.execute("DELETE FROM substitutes", [])?;
         self.db.execute("DELETE FROM templates", [])?;
@@ -356,6 +397,25 @@ impl TemplateDatabase {
             .prepare("SELECT id FROM templates WHERE name = ?1")?;
         let template_id: i64 = stmt.query_row(&[template], |row| row.get(0))?;
         Ok(template_id.to_string())
+    }
+
+    pub fn get_sub_records(&self, template: &str) -> rusqlite::Result<Vec<SubstituteRecord>> {
+        let template_id = self.find_template_id(template)?;
+        let mut stmt = self
+            .db
+            .prepare("SELECT id, name, template_id FROM substitutes WHERE template_id = ?1")?;
+
+        let records: Result<Vec<SubstituteRecord>, rusqlite::Error> = stmt
+            .query_map([template_id], |row| {
+                Ok(SubstituteRecord {
+                    id: row.get(0)?,
+                    name: row.get(1)?,
+                    template_id: row.get(2)?,
+                })
+            })?
+            .collect();
+
+        Ok(records?)
     }
 
     pub fn get_subs(&self, template: &str) -> rusqlite::Result<Vec<String>> {

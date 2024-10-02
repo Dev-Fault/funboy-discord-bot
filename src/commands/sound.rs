@@ -322,7 +322,7 @@ pub async fn stop_tracks(ctx: Context<'_>) -> Result<(), Error> {
 
 /// Lists currently playing audio tracks
 #[poise::command(slash_command, prefix_command)]
-pub async fn list_tracks(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn show_tracks(ctx: Context<'_>) -> Result<(), Error> {
     let manager = get_songbird_manager(ctx).await;
 
     if let Some(handler_lock) = manager.get(ctx.guild_id().unwrap()) {

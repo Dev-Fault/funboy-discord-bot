@@ -21,7 +21,7 @@ pub fn vectorize_input(input: &str) -> Vec<&str> {
     output
 }
 
-pub fn split_message(message: &Vec<String>) -> Vec<String> {
+pub fn split_message(message: Vec<&str>) -> Vec<String> {
     let mut message_split: Vec<String> = Vec::new();
 
     let mut iter = message.iter();
@@ -65,7 +65,7 @@ pub fn split_long_string<'a>(s: &'a str) -> Vec<&'a str> {
     output
 }
 
-pub fn format_output_vector(output: Vec<String>) -> Vec<String> {
+pub fn format_as_standard_list(output: Vec<&str>) -> Vec<String> {
     output
         .iter()
         .map(|s| {
@@ -74,6 +74,18 @@ pub fn format_output_vector(output: Vec<String>) -> Vec<String> {
             } else {
                 s.to_string() + " "
             }
+        })
+        .collect()
+}
+
+pub fn format_as_numeric_list(output: Vec<&str>) -> Vec<String> {
+    let mut i = 0;
+    output
+        .iter()
+        .map(|s| {
+            let numbered = i.to_string() + ": " + s + "\n";
+            i = i + 1;
+            return numbered;
         })
         .collect()
 }

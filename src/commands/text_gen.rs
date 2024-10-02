@@ -1,3 +1,4 @@
+use crate::io_utils::discord_message_format;
 use crate::text_interpolator::TextInterpolator;
 use crate::{
     interpreter::Interpreter,
@@ -190,44 +191,44 @@ pub async fn remove_sub(
     template: String,
     substitute: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().template_db.lock().await;
-
-    match db.remove_sub(&template, &substitute) {
-        Err(e) => match e {
-            rusqlite::Error::QueryReturnedNoRows => {
-                ctx.say_ephemeral(&format!(
-                    "No template named **\"**{}**\"** exists.",
-                    &template
-                ))
-                .await?;
-            }
-            _ => {
-                ctx.say_ephemeral(&e.to_string()).await?;
-            }
-        },
-        Ok(result) => {
-            if result {
-                ctx.multi_say(
-                    &format!(
-                        "Removed substitute **\"**{}**\"** from template **\"**{}**\"**.",
-                        &substitute, &template
-                    )[..],
-                    false,
-                )
-                .await?;
-            } else {
-                ctx.multi_say(
-                    &format!(
-                        "Substitute **\"**{}**\"** was not found in template **\"**{}**\"**.",
-                        &substitute, &template
-                    )[..],
-                    true,
-                )
-                .await?;
+    {
+        let mut db = ctx.data().template_db.lock().await;
+        match db.remove_sub(&template, &substitute) {
+            Err(e) => match e {
+                rusqlite::Error::QueryReturnedNoRows => {
+                    ctx.say_ephemeral(&format!(
+                        "No template named **\"**{}**\"** exists.",
+                        template
+                    ))
+                    .await?;
+                }
+                _ => {
+                    ctx.say_ephemeral(&e.to_string()).await?;
+                }
+            },
+            Ok(result) => {
+                if result {
+                    ctx.multi_say(
+                        &format!(
+                            "Removed substitute **\"**{}**\"** from template **\"**{}**\"**.",
+                            substitute, template
+                        )[..],
+                        false,
+                    )
+                    .await?;
+                } else {
+                    ctx.multi_say(
+                        &format!(
+                            "Substitute **\"**{}**\"** was not found in template **\"**{}**\"**.",
+                            substitute, template
+                        )[..],
+                        true,
+                    )
+                    .await?;
+                }
             }
         }
     }
-
     Ok(())
 }
 
@@ -299,49 +300,50 @@ pub async fn replace_sub(
     old_sub: String,
     new_sub: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().template_db.lock().await;
+    {
+        let mut db = ctx.data().template_db.lock().await;
 
-    if new_sub.len() > INPUT_BYTE_LIMIT {
-        ctx.say_ephemeral(ERROR_SUB_TOO_LARGE).await?;
-        return Ok(());
-    }
+        if new_sub.len() > INPUT_BYTE_LIMIT {
+            ctx.say_ephemeral(ERROR_SUB_TOO_LARGE).await?;
+            return Ok(());
+        }
 
-    match db.rename_substitute(&template, &old_sub, &new_sub) {
-        Err(e) => match e {
-            rusqlite::Error::QueryReturnedNoRows => {
-                ctx.say_ephemeral(&format!(
-                    "No template named **\"**{}**\"** exists.",
-                    &template
-                ))
-                .await?;
-            }
-            _ => {
-                ctx.say_ephemeral(&e.to_string()).await?;
-            }
-        },
-        Ok(result) => {
-            if result {
-                ctx.multi_say(
-                    &format!(
-                        "Renamed substitute **\"**{}**\"** to **\"**{}**\"** in template **\"**{}**\"**.",
-                        &old_sub, &new_sub, &template
-                    )[..],
-                    false,
-                )
-                .await?;
-            } else {
-                ctx.multi_say(
-                    &format!(
-                        "No substitute exists in template **\"**{}**\"** named **\"**{}**\"**.",
-                        &template, &old_sub
-                    )[..],
-                    true,
-                )
-                .await?;
+        match db.replace_substitute(&template, &old_sub, &new_sub) {
+            Err(e) => match e {
+                rusqlite::Error::QueryReturnedNoRows => {
+                    ctx.say_ephemeral(&format!(
+                        "No template named **\"**{}**\"** exists.",
+                        template
+                    ))
+                    .await?;
+                }
+                _ => {
+                    ctx.say_ephemeral(&e.to_string()).await?;
+                }
+            },
+            Ok(result) => {
+                if result {
+                    ctx.multi_say(
+                            &format!(
+                                "Renamed substitute **\"**{}**\"** to **\"**{}**\"** in template **\"**{}**\"**.",
+                                old_sub, new_sub, template
+                            )[..],
+                            false,
+                        )
+                        .await?;
+                } else {
+                    ctx.multi_say(
+                        &format!(
+                            "No substitute exists in template **\"**{}**\"** named **\"**{}**\"**.",
+                            template, old_sub
+                        )[..],
+                        true,
+                    )
+                    .await?;
+                }
             }
         }
     }
-
     Ok(())
 }
 
@@ -365,7 +367,9 @@ pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Resu
 
     match db.rename_template(&from, &to) {
         Err(e) => {
-            ctx.say_ephemeral(&e.to_string()).await?;
+            eprintln!("Error: {}", e.to_string());
+            ctx.say_ephemeral(&format!("Error: Failed to rename template. Make sure no preexisting templates exist named **{}**.", to))
+                .await?;
         }
         Ok(result) => {
             if result {
@@ -384,18 +388,16 @@ pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Resu
     Ok(())
 }
 
-/// Lists all templates or optionally substitutes inside a template.
-///
-/// To list all templates simply type /list and press enter
-/// To list all substitutes within a template type /list and then the name of a template
-///
-/// Example usage: **/list** template: **fruit**
-#[poise::command(slash_command, prefix_command)]
-pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Error> {
+async fn say_list(
+    ctx: Context<'_>,
+    template: Option<String>,
+    formatter: fn(Vec<&str>) -> Vec<String>,
+    show_ids: bool,
+) -> Result<(), Error> {
     let db = ctx.data().template_db.lock().await;
 
     match template {
-        Some(tmp) => match db.get_subs(&tmp) {
+        Some(tmp) => match db.get_sub_records(&tmp) {
             Ok(subs) => {
                 if subs.is_empty() {
                     ctx.say_ephemeral(
@@ -403,10 +405,36 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
                     )
                     .await?;
                 } else {
-                    ctx.say_vec(subs, true).await?;
+                    if show_ids {
+                        let subs_with_ids: Vec<String> = subs
+                            .iter()
+                            .map(|record| {
+                                format!(
+                                    "**ID:** {}\n**Substitute:**\n{}\n\n",
+                                    record.id, record.name
+                                )
+                            })
+                            .collect();
+
+                        ctx.say_vec(
+                            subs_with_ids.iter().map(|s| s.as_str()).collect(),
+                            true,
+                            None,
+                        )
+                        .await?;
+                    } else {
+                        ctx.say_vec(
+                            subs.iter().map(|record| record.name.as_str()).collect(),
+                            true,
+                            Some(formatter),
+                        )
+                        .await?;
+                    }
                 }
             }
-            _ => {
+            Err(e) => {
+                eprintln!("Error: {}", &e.to_string());
+
                 ctx.say_ephemeral(
                     &format!(
                         "Error: Couldn't get any subsitutes for template **\"**{}**\"**.",
@@ -421,7 +449,12 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
                 if tmps.is_empty() {
                     ctx.say_ephemeral(ERROR_NO_TEMPLATES).await?;
                 } else {
-                    ctx.say_vec(tmps, true).await?;
+                    ctx.say_vec(
+                        tmps.iter().map(|s| s.as_str()).collect(),
+                        true,
+                        Some(formatter),
+                    )
+                    .await?;
                 }
             }
             _ => {
@@ -429,6 +462,51 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
             }
         },
     }
+    Ok(())
+}
+
+/// Lists all templates or optionally substitutes inside a template.
+///
+/// To list all templates simply type /list and press enter
+/// To list all substitutes within a template type /list and then the name of a template
+///
+/// Example usage: **/list** template: **fruit**
+#[poise::command(slash_command, prefix_command)]
+pub async fn list(
+    ctx: Context<'_>,
+    template: Option<String>,
+    show_ids: Option<bool>,
+) -> Result<(), Error> {
+    let show_ids = match show_ids {
+        Some(value) => value,
+        None => false,
+    };
+
+    say_list(
+        ctx,
+        template,
+        discord_message_format::format_as_standard_list,
+        show_ids,
+    )
+    .await?;
+    Ok(())
+}
+
+/// Numerically lists all templates or optionally substitutes inside a template.
+///
+/// To list all templates simply type /list_numerically and press enter
+/// To list all substitutes within a template type /list_numerically and then the name of a template
+///
+/// Example usage: **/list_numerically** template: **fruit**
+#[poise::command(slash_command, prefix_command)]
+pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Result<(), Error> {
+    say_list(
+        ctx,
+        template,
+        discord_message_format::format_as_numeric_list,
+        false,
+    )
+    .await?;
     Ok(())
 }
 

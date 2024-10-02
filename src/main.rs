@@ -63,11 +63,12 @@ async fn main() {
                 commands::text_gen::replace_sub(),
                 commands::text_gen::generate(),
                 commands::text_gen::list(),
+                commands::text_gen::list_numerically(),
                 commands::sound::join_voice(),
                 commands::sound::leave_voice(),
                 commands::sound::play_track(),
                 commands::sound::stop_tracks(),
-                commands::sound::list_tracks(),
+                commands::sound::show_tracks(),
                 commands::image::search_image(),
             ],
             event_handler: |ctx, event, _framework_ctx, data| {

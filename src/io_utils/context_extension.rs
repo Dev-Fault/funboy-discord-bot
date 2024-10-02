@@ -2,16 +2,21 @@ use crate::{Context, Error};
 
 use poise::CreateReply;
 
-use super::discord_message_format::{
-    format_output_vector, split_long_string, split_message, DISCORD_CHARACTER_LIMIT,
-};
+use super::discord_message_format::{split_long_string, split_message, DISCORD_CHARACTER_LIMIT};
 
 pub const MESSAGE_BYTE_LIMIT: usize = DISCORD_CHARACTER_LIMIT * 4;
 pub const WARN_MESSAGE_SIZE_EXCEEDED: &str = "Message was too large to send.";
 pub const WARN_EMPTY_MESSAGE: &str = "Message was empty.";
 
+pub type VectorMessageFormatter = fn(Vec<&str>) -> Vec<String>;
+
 pub trait ContextExtension {
-    async fn say_vec(&self, message: Vec<String>, ephemeral: bool) -> Result<(), Error>;
+    async fn say_vec(
+        &self,
+        message: Vec<&str>,
+        ephemeral: bool,
+        formatter: Option<VectorMessageFormatter>,
+    ) -> Result<(), Error>;
 
     async fn say_ephemeral(&self, message: &str) -> Result<(), Error>;
 
@@ -19,7 +24,12 @@ pub trait ContextExtension {
 }
 
 impl<'a> ContextExtension for Context<'a> {
-    async fn say_vec(&self, message: Vec<String>, ephemeral: bool) -> Result<(), Error> {
+    async fn say_vec(
+        &self,
+        message: Vec<&str>,
+        ephemeral: bool,
+        formatter: Option<VectorMessageFormatter>,
+    ) -> Result<(), Error> {
         let mut size: usize = 0;
 
         for string in &message[..] {
@@ -34,7 +44,16 @@ impl<'a> ContextExtension for Context<'a> {
             return Ok(());
         }
 
-        for split_message in split_message(&format_output_vector(message)) {
+        let formatted_message: Vec<String>;
+        let message = match formatter {
+            Some(formatter) => {
+                formatted_message = formatter(message);
+                formatted_message.iter().map(|msg| msg.as_str()).collect()
+            }
+            None => message,
+        };
+
+        for split_message in split_message(message) {
             self.defer_ephemeral().await?;
             self.send(
                 CreateReply::default()
