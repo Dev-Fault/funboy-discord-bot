@@ -1,7 +1,14 @@
 pub use rusqlite;
 use rusqlite::{Connection, Transaction};
 
+use crate::text_interpolator;
+
 const DATABASE_VERSION: i32 = 1;
+
+struct TemplateReplacement {
+    old: String,
+    new: String,
+}
 
 #[derive(Debug)]
 pub struct TemplateDatabase {
@@ -270,6 +277,27 @@ impl TemplateDatabase {
         Ok(removed_subs)
     }
 
+    fn get_template_replacements(old: &str, new: &str) -> Vec<TemplateReplacement> {
+        let mut replacements = Vec::new();
+        for header in text_interpolator::defaults::TEMPLATE_HEADERS {
+            let occurence = header.to_string() + old;
+            let replacement = header.to_string() + new;
+            replacements.push(TemplateReplacement {
+                old: occurence,
+                new: replacement,
+            });
+        }
+
+        let occurence = "get_sub(\"".to_string() + old + "\")";
+        let replacement = "get_sub(\"".to_string() + new + "\")";
+        replacements.push(TemplateReplacement {
+            old: occurence,
+            new: replacement,
+        });
+
+        replacements
+    }
+
     pub fn rename_template(
         &mut self,
         old_template: &str,
@@ -281,6 +309,15 @@ impl TemplateDatabase {
             "UPDATE templates SET name = ?1 WHERE name = ?2",
             &[new_template, old_template],
         )?;
+
+        for replacement in Self::get_template_replacements(old_template, new_template) {
+            tx.execute(
+                "UPDATE substitutes 
+                    SET name = REPLACE(name, ?1, ?2)
+                    WHERE INSTR(name, ?1) > 0;",
+                [replacement.old, replacement.new],
+            )?;
+        }
 
         tx.commit()?;
 
