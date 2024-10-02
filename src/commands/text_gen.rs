@@ -8,7 +8,6 @@ use crate::{
     Context, Error,
 };
 
-use template_substitution_database::rusqlite;
 use text_interpolator::TextInterpolator;
 
 const INPUT_BYTE_LIMIT: usize = MESSAGE_BYTE_LIMIT;

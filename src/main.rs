@@ -4,13 +4,14 @@ use ::serenity::all::{ClientBuilder, FullEvent, GatewayIntents, Interaction};
 use reqwest::Client as HttpClient;
 use serenity::all::ComponentInteraction;
 use songbird::{typemap::TypeMapKey, SerenityInit};
-use template_substitution_database::TemplateDatabase;
+use storage::template_database::TemplateDatabase;
 use tokio::sync::Mutex;
 
 mod commands;
 #[allow(dead_code)]
 mod interpreter;
 mod io_utils;
+mod storage;
 
 use commands::sound::{TrackComponent, TrackList, TRACK_BUTTON_ID};
 

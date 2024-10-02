@@ -1,8 +1,8 @@
+use crate::TemplateDatabase;
 use lexer::tokenize;
 use parser::{parse, Command, CommandType, ValueType};
 use rand::{self, Rng};
 use std::collections::HashMap;
-use template_substitution_database::TemplateDatabase;
 use text_interpolator::{defaults::TEMPLATE_CARROT, TextInterpolator};
 
 use crate::{io_utils::context_extension::MESSAGE_BYTE_LIMIT, FUNBOY_DB_PATH};
