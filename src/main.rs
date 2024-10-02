@@ -12,6 +12,7 @@ mod commands;
 mod interpreter;
 mod io_utils;
 mod storage;
+mod text_interpolator;
 
 use commands::sound::{TrackComponent, TrackList, TRACK_BUTTON_ID};
 

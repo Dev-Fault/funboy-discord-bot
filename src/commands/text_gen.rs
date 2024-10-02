@@ -1,3 +1,4 @@
+use crate::text_interpolator::TextInterpolator;
 use crate::{
     interpreter::Interpreter,
     io_utils::{
@@ -7,8 +8,6 @@ use crate::{
     },
     Context, Error,
 };
-
-use text_interpolator::TextInterpolator;
 
 const INPUT_BYTE_LIMIT: usize = MESSAGE_BYTE_LIMIT;
 

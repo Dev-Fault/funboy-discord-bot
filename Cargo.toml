@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-text_interpolator = { path = "/home/dustin/Documents/developer/rust_programs/text_interpolator" }
 poise = "0.6.1"
 tokio = {version = "1.39.2", features = ["full"]}
 rand = "0.8.5"
