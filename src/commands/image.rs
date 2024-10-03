@@ -13,7 +13,7 @@ struct ImgurImage {
     title: Option<String>,
 }
 
-/// Searches for an image based on a query.
+/// Search for and display an image based on a query.
 ///
 /// Example usage: **/search_image**  query: cat
 #[poise::command(slash_command, prefix_command)]

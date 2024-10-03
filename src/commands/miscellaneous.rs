@@ -6,7 +6,7 @@ use poise::{
     CreateReply,
 };
 
-/// Displays help information for commands
+/// Display help information for commands
 #[poise::command(slash_command, prefix_command)]
 pub async fn help(ctx: Context<'_>, command: Option<String>) -> Result<(), Error> {
     let bottom_text = "\
@@ -29,7 +29,7 @@ pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Moves pinned messages posted by the bot to a selected channel
+/// Move pinned messages posted by the bot to a selected channel
 ///
 /// Example usage: **/move_bot_pins** to_channel: **my-channel**
 #[poise::command(slash_command, prefix_command)]
@@ -103,7 +103,7 @@ async fn get_channel_id(ctx: Context<'_>, channel_name: &str) -> Result<Option<C
     }
 }
 
-/// Displays the age of a users account.
+/// Display the age of a users account.
 #[poise::command(slash_command, prefix_command)]
 pub async fn age(
     ctx: Context<'_>,

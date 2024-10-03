@@ -7,7 +7,7 @@ use crate::io_utils::discord_message_format::vectorize_input;
 use crate::Context;
 use crate::Error;
 
-/// Generates a random number between a minimum and maximum value.
+/// Generate a random number between a minimum and maximum value.
 ///
 /// Example usage: **/random_number** min: **1** max: **6**
 #[poise::command(slash_command, prefix_command)]
@@ -38,7 +38,7 @@ fn get_random_result<T: FromStr + PartialOrd + SampleUniform + ToString>(
     }
 }
 
-/// Selects a random word from a list of words.
+/// Select a random word from a list of words.
 ///
 /// Use quotes for multi-word terms like: "apple tree"
 ///

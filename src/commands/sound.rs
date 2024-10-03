@@ -176,7 +176,7 @@ impl TrackComponent {
     }
 }
 
-/// Joins bot to current voice channel
+/// Join bot to current voice channel
 #[poise::command(slash_command, prefix_command)]
 pub async fn join_voice(ctx: Context<'_>) -> Result<(), Error> {
     let (guild_id, channel_id) = {
@@ -220,7 +220,7 @@ pub async fn join_voice(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Disconnects bot from voice channel
+/// Disconnect bot from voice channel
 #[poise::command(slash_command, prefix_command)]
 pub async fn leave_voice(ctx: Context<'_>) -> Result<(), Error> {
     let guild_id = ctx.guild_id().unwrap();
@@ -242,7 +242,7 @@ pub async fn leave_voice(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Plays audio track from url or search query
+/// Play audio track from url or search query
 ///
 /// Example usage: **/play_track** url_or_query: **https://www.youtube.com/watch?v=a3mxLL7nX1E**
 /// Example usage: **/play_track** url_or_query: **Back In Black**
@@ -301,7 +301,7 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
     Ok(())
 }
 
-/// Stops all currently playing audio tracks
+/// Stop all currently playing audio tracks
 #[poise::command(slash_command, prefix_command)]
 pub async fn stop_tracks(ctx: Context<'_>) -> Result<(), Error> {
     ctx.data().track_list.lock().await.clear();
@@ -320,7 +320,7 @@ pub async fn stop_tracks(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Lists currently playing audio tracks
+/// Show currently playing audio tracks
 #[poise::command(slash_command, prefix_command)]
 pub async fn show_tracks(ctx: Context<'_>) -> Result<(), Error> {
     let manager = get_songbird_manager(ctx).await;

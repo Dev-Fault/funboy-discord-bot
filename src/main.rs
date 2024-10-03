@@ -59,6 +59,7 @@ async fn main() {
                 commands::text_gen::remove_sub(),
                 commands::text_gen::remove_sub_by_id(),
                 commands::text_gen::remove_subs(),
+                commands::text_gen::remove_subs_by_id(),
                 commands::text_gen::remove_template(),
                 commands::text_gen::rename_template(),
                 commands::text_gen::replace_sub(),

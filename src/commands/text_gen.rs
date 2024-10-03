@@ -20,13 +20,14 @@ const ERROR_GENERATION_FAILED: &str = "Error: Text generation failed.";
 const ERROR_TEMPLATE_TOO_LARGE: &str = "Error: Template was too large.";
 const ERROR_SUB_TOO_LARGE: &str = "Error: Substitute was too large.";
 
-/// Adds multiple substitutes to a template.
+/// Add and create templates with multiple substitutes
 ///
-/// To use this command type in a template (it doesn't have to exist yet)
-/// then type in the substitutes that you want to add
+/// A template is an alias that refers to one or more substitutes
 ///
-/// Substitutes are seperated by spaces such as: **apple banana orange**
-/// To add a multi-word substitute use quotes like: **"This is a multi-word substitute!"**
+/// A template must not have any special characters but otherwise can be anything
+///
+/// **Tip:** Add a single word substitutes by seperating them with spaces: **cat dog car house**
+/// **Tip:** a multi-word substitute by surround it in quotes: **"Big brown dog"**
 ///
 /// Example usage: **/add** template: **fruit** substitutes: **apple banana orange "dragon fruit" "key lime"**
 #[poise::command(slash_command, prefix_command)]
@@ -82,16 +83,9 @@ pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Res
     Ok(())
 }
 
-/// Adds a single substitute to a template.
+/// Add a single substitute to a template
 ///
-/// To use this command type in a template (it doesn't have to exist yet)
-/// then type in the substitute that you want to add
-///
-/// The substitute can be a single word or multiple words like:
-/// **apple** or **I want to eat an apple**
-/// both will be added as a single substitute under the chosen template.
-///
-/// Example usage: **/add_sub** template: **fruit** substitute: **I love apples!**
+/// Example usage: **/add_sub** template: **quote** substitute: **Quoth the raven, "Nevermore."**
 #[poise::command(slash_command, prefix_command)]
 pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> Result<(), Error> {
     if template.contains(|c: char| !c.is_alphanumeric()) {
@@ -137,12 +131,10 @@ pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> 
     Ok(())
 }
 
-/// Removes a template.
+/// Remove a template
 ///
 /// **Warning:** This command will permanently delete a template and all of it's substitutes
 /// this action cannot be undone!
-///
-/// To use this command type in the template you want to remove
 ///
 /// Example usage: **/remove_template** template: **fruit**
 #[poise::command(slash_command, prefix_command)]
@@ -179,10 +171,7 @@ pub async fn remove_template(ctx: Context<'_>, template: String) -> Result<(), E
     Ok(())
 }
 
-/// Removes a single substitute from a template.
-///
-/// To use this command type in the name of a template
-/// and then the substitute within the template that you want to delete
+/// Remove a single substitute from a template
 ///
 /// Example usage: **/remove_sub** template: **fruit** substitute: **I love apples!**
 #[poise::command(slash_command, prefix_command)]
@@ -231,12 +220,11 @@ pub async fn remove_sub(
     Ok(())
 }
 
-/// Removes a single substitute from a template.
+/// Remove a single substitute with it's id from a template
 ///
-/// To use this command type in the name of a template
-/// and then the substitute within the template that you want to delete
+/// **Tip:** To get the id of a substitute use the command /list_ids
 ///
-/// Example usage: **/remove_sub** template: **fruit** substitute: **I love apples!**
+/// Example usage: **/remove_sub** template: **fruit** id: **1234**
 #[poise::command(slash_command, prefix_command)]
 pub async fn remove_sub_by_id(ctx: Context<'_>, template: String, id: usize) -> Result<(), Error> {
     let mut db = ctx.data().template_db.lock().await;
@@ -279,10 +267,10 @@ pub async fn remove_sub_by_id(ctx: Context<'_>, template: String, id: usize) -> 
     Ok(())
 }
 
-/// Removes multiple substitutes from a template.
+/// Remove multiple substitutes from a template
 ///
-/// To use this command type in the name of a template
-/// and then the substitutes within the template that you want to delete
+/// **Tip:** Remove a single word substitutes by seperating them with spaces: **cat dog car house**
+/// **Tip:** Remove a multi-word substitute by surround it in quotes: **"Big brown dog"**
 ///
 /// Example usage: **/remove_subs** template: **fruit** substitutes: **"dragon fruit" apple banana "I love apples!"**
 #[poise::command(slash_command, prefix_command)]
@@ -334,10 +322,89 @@ pub async fn remove_subs(
     Ok(())
 }
 
-/// Replaces an existing substitute with a new substitute.
+/// Remove multiple substitutes with their ids from a template
 ///
-/// To use this command type in an existing template
-/// then type in an existing substitute followed by the replacement substitute
+/// **Tip:** Seperate each id by a space: 1234 4321
+///
+/// Example usage: **/remove_subs_by_id** template: **noun** ids: 0 1 2 3 4
+#[poise::command(slash_command, prefix_command)]
+pub async fn remove_subs_by_id(
+    ctx: Context<'_>,
+    template: String,
+    ids: String,
+) -> Result<(), Error> {
+    let mut db = ctx.data().template_db.lock().await;
+
+    let mut invalid_ids: Vec<&str> = Vec::new();
+    let subs_to_remove: Vec<usize> = vectorize_input(ids.as_str())
+        .iter()
+        .filter_map(|id| match id.parse::<usize>() {
+            Ok(value) => Some(value),
+            Err(_) => {
+                invalid_ids.push(id);
+                None
+            }
+        })
+        .collect();
+
+    if invalid_ids.len() > 0 {
+        ctx.say_ephemeral(&format!("Ignoring invalid ids {:?}", invalid_ids))
+            .await?;
+    }
+
+    match db.remove_subs_by_id(&template, &subs_to_remove) {
+        Err(e) => match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                ctx.say_ephemeral(&format!(
+                    "No template named **\"**{}**\"** exists.",
+                    &template
+                ))
+                .await?;
+            }
+            _ => {
+                ctx.say_ephemeral(&e.to_string()).await?;
+            }
+        },
+        Ok(removed_ids) => {
+            let ephemeral;
+            let message = match removed_ids.len() {
+                0 => {
+                    ephemeral = true;
+                    "No substitutes were removed.".to_string()
+                }
+                _ => {
+                    ephemeral = false;
+                    format!(
+                        "Removed substitutes with ids {:?} from template **\"**{}**\"**.",
+                        removed_ids, &template
+                    )
+                }
+            };
+
+            ctx.multi_say(&message[..], ephemeral).await?;
+
+            let ignored_ids: Vec<usize> = subs_to_remove
+                .iter()
+                .filter(|id| !removed_ids.contains(id))
+                .map(|id| *id)
+                .collect();
+            if ignored_ids.len() > 0 {
+                ctx.multi_say(
+                    &format!(
+                        "Substitutes with ids {:?} were not found in template **\"**{}**\"**.",
+                        ignored_ids, &template
+                    )[..],
+                    true,
+                )
+                .await?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
+/// Replace an old substitute with a new one
 ///
 /// Example usage: **/replace_sub** template: **fruit** old_sub: **apple** new_sub: **orange**
 #[poise::command(slash_command, prefix_command)]
@@ -394,12 +461,9 @@ pub async fn replace_sub(
     Ok(())
 }
 
-/// Replaces an existing substitute with a new substitute.
+/// Replace an old substitute with it's id with a new one
 ///
-/// To use this command type in an existing template
-/// then type in an existing substitute followed by the replacement substitute
-///
-/// Example usage: **/replace_sub** template: **fruit** old_sub: **apple** new_sub: **orange**
+/// Example usage: **/replace_sub_by_id** template: **fruit** id: **1234** new_sub: **orange**
 #[poise::command(slash_command, prefix_command)]
 pub async fn replace_sub_by_id(
     ctx: Context<'_>,
@@ -454,9 +518,10 @@ pub async fn replace_sub_by_id(
     Ok(())
 }
 
-/// Renames a template.
+/// Rename a template
 ///
-/// To use this command type in the template you want to rename followed by the new template name
+/// **Tip:** If this template is referenced inside of another template it will also rename
+/// the refernce
 ///
 /// Example usage: **/rename_template** from: **fruit** to: **vegtable**
 #[poise::command(slash_command, prefix_command)]
@@ -572,12 +637,10 @@ async fn say_list(
     Ok(())
 }
 
-/// Lists all templates or optionally substitutes inside a template.
-///
-/// To list all templates simply type /list and press enter
-/// To list all substitutes within a template type /list and then the name of a template
+/// List all templates or substitutes in a template
 ///
 /// Example usage: **/list** template: **fruit**
+/// Example usage: **/list**
 #[poise::command(slash_command, prefix_command)]
 pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Error> {
     say_list(
@@ -590,7 +653,7 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
     Ok(())
 }
 
-/// Lists substitues in a template with their ids
+/// List substitues in a template with their ids
 ///
 /// Example usage: **/list_ids** template: **noun**
 #[poise::command(slash_command, prefix_command)]
@@ -605,12 +668,10 @@ pub async fn list_ids(ctx: Context<'_>, template: String) -> Result<(), Error> {
     Ok(())
 }
 
-/// Numerically lists all templates or optionally substitutes inside a template.
-///
-/// To list all templates simply type /list_numerically and press enter
-/// To list all substitutes within a template type /list_numerically and then the name of a template
+/// List substitutes or templates numerically ordered
 ///
 /// Example usage: **/list_numerically** template: **noun**
+/// Example usage: **/list_numerically**
 #[poise::command(slash_command, prefix_command)]
 pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Result<(), Error> {
     say_list(
@@ -623,16 +684,19 @@ pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Res
     Ok(())
 }
 
-/// Generates randomized text by replacing templates with a random substitute.
+/// Generate randomized text by replacing templates with a random substitute.
 ///
 /// To use this command enter text optionally containing templates headed with any of the following
-/// characters ' ^ `
+/// characters ' ^ `. If text is headed by one of these characters the generator will attempt to
+/// replace it with a random substitute.
 /// Example: **I love 'fruit**
+/// Possible output: **I love apple**
 /// Example 2: **I love ^fruit**
+/// Possible output: **I love banana**
 ///
 /// You can add a suffix to a template by including another template character at the end of the
 /// template name:
-/// **^verb^ing** which may be subsituted into **flying** if a substitute exists named **fly**
+/// **^verb^ing** which may be subsituted into **eating** if a substitute exists named **eat**
 ///
 /// Example usage: **/generate I love ^fruit^s**
 /// Example output: **I love apples!**
