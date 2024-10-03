@@ -191,41 +191,88 @@ pub async fn remove_sub(
     template: String,
     substitute: String,
 ) -> Result<(), Error> {
-    {
-        let mut db = ctx.data().template_db.lock().await;
-        match db.remove_sub(&template, &substitute) {
-            Err(e) => match e {
-                rusqlite::Error::QueryReturnedNoRows => {
-                    ctx.say_ephemeral(&format!(
-                        "No template named **\"**{}**\"** exists.",
-                        template
-                    ))
-                    .await?;
-                }
-                _ => {
-                    ctx.say_ephemeral(&e.to_string()).await?;
-                }
-            },
-            Ok(result) => {
-                if result {
-                    ctx.multi_say(
-                        &format!(
-                            "Removed substitute **\"**{}**\"** from template **\"**{}**\"**.",
-                            substitute, template
-                        )[..],
-                        false,
-                    )
-                    .await?;
-                } else {
-                    ctx.multi_say(
-                        &format!(
-                            "Substitute **\"**{}**\"** was not found in template **\"**{}**\"**.",
-                            substitute, template
-                        )[..],
-                        true,
-                    )
-                    .await?;
-                }
+    let mut db = ctx.data().template_db.lock().await;
+
+    match db.remove_sub(&template, &substitute) {
+        Err(e) => match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                ctx.say_ephemeral(&format!(
+                    "No template named **\"**{}**\"** exists.",
+                    template
+                ))
+                .await?;
+            }
+            _ => {
+                ctx.say_ephemeral(&e.to_string()).await?;
+            }
+        },
+        Ok(result) => {
+            if result {
+                ctx.multi_say(
+                    &format!(
+                        "Removed substitute **\"**{}**\"** from template **\"**{}**\"**.",
+                        substitute, template
+                    )[..],
+                    false,
+                )
+                .await?;
+            } else {
+                ctx.multi_say(
+                    &format!(
+                        "Substitute **\"**{}**\"** was not found in template **\"**{}**\"**.",
+                        substitute, template
+                    )[..],
+                    true,
+                )
+                .await?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Removes a single substitute from a template.
+///
+/// To use this command type in the name of a template
+/// and then the substitute within the template that you want to delete
+///
+/// Example usage: **/remove_sub** template: **fruit** substitute: **I love apples!**
+#[poise::command(slash_command, prefix_command)]
+pub async fn remove_sub_by_id(ctx: Context<'_>, template: String, id: usize) -> Result<(), Error> {
+    let mut db = ctx.data().template_db.lock().await;
+
+    match db.remove_sub_by_id(&template, id) {
+        Err(e) => match e {
+            rusqlite::Error::QueryReturnedNoRows => {
+                ctx.say_ephemeral(&format!(
+                    "No template named **\"**{}**\"** exists.",
+                    template
+                ))
+                .await?;
+            }
+            _ => {
+                ctx.say_ephemeral(&e.to_string()).await?;
+            }
+        },
+        Ok(result) => {
+            if result {
+                ctx.multi_say(
+                    &format!(
+                        "Removed substitute with id **{}** from template **\"**{}**\"**.",
+                        id, template
+                    )[..],
+                    false,
+                )
+                .await?;
+            } else {
+                ctx.multi_say(
+                    &format!(
+                        "Substitute with id **{}** was not found in template **\"**{}**\"**.",
+                        id, template
+                    )[..],
+                    true,
+                )
+                .await?;
             }
         }
     }
@@ -237,7 +284,7 @@ pub async fn remove_sub(
 /// To use this command type in the name of a template
 /// and then the substitutes within the template that you want to delete
 ///
-/// Example usage: **/remove_sub** template: **fruit** substitute: **"dragon fruit" apple banana "I love apples!"**
+/// Example usage: **/remove_subs** template: **fruit** substitutes: **"dragon fruit" apple banana "I love apples!"**
 #[poise::command(slash_command, prefix_command)]
 pub async fn remove_subs(
     ctx: Context<'_>,
@@ -336,6 +383,66 @@ pub async fn replace_sub(
                         &format!(
                             "No substitute exists in template **\"**{}**\"** named **\"**{}**\"**.",
                             template, old_sub
+                        )[..],
+                        true,
+                    )
+                    .await?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Replaces an existing substitute with a new substitute.
+///
+/// To use this command type in an existing template
+/// then type in an existing substitute followed by the replacement substitute
+///
+/// Example usage: **/replace_sub** template: **fruit** old_sub: **apple** new_sub: **orange**
+#[poise::command(slash_command, prefix_command)]
+pub async fn replace_sub_by_id(
+    ctx: Context<'_>,
+    template: String,
+    id: usize,
+    new_sub: String,
+) -> Result<(), Error> {
+    {
+        let mut db = ctx.data().template_db.lock().await;
+
+        if new_sub.len() > INPUT_BYTE_LIMIT {
+            ctx.say_ephemeral(ERROR_SUB_TOO_LARGE).await?;
+            return Ok(());
+        }
+
+        match db.replace_substitute_by_id(&template, id, &new_sub) {
+            Err(e) => match e {
+                rusqlite::Error::QueryReturnedNoRows => {
+                    ctx.say_ephemeral(&format!(
+                        "No template named **\"**{}**\"** exists.",
+                        template
+                    ))
+                    .await?;
+                }
+                _ => {
+                    ctx.say_ephemeral(&e.to_string()).await?;
+                }
+            },
+            Ok(result) => {
+                if result {
+                    ctx.multi_say(
+                            &format!(
+                                "Renamed substitute with id **{}** to **\"**{}**\"** in template **\"**{}**\"**.",
+                                id, new_sub, template
+                            )[..],
+                            false,
+                        )
+                        .await?;
+                } else {
+                    ctx.multi_say(
+                        &format!(
+                            "No substitute exists in template **\"**{}**\"** with id **{}**.",
+                            template, id
                         )[..],
                         true,
                     )
@@ -472,21 +579,27 @@ async fn say_list(
 ///
 /// Example usage: **/list** template: **fruit**
 #[poise::command(slash_command, prefix_command)]
-pub async fn list(
-    ctx: Context<'_>,
-    template: Option<String>,
-    show_ids: Option<bool>,
-) -> Result<(), Error> {
-    let show_ids = match show_ids {
-        Some(value) => value,
-        None => false,
-    };
-
+pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Error> {
     say_list(
         ctx,
         template,
         discord_message_format::format_as_standard_list,
-        show_ids,
+        false,
+    )
+    .await?;
+    Ok(())
+}
+
+/// Lists substitues in a template with their ids
+///
+/// Example usage: **/list_ids** template: **noun**
+#[poise::command(slash_command, prefix_command)]
+pub async fn list_ids(ctx: Context<'_>, template: String) -> Result<(), Error> {
+    say_list(
+        ctx,
+        Some(template),
+        discord_message_format::format_as_standard_list,
+        true,
     )
     .await?;
     Ok(())
@@ -497,7 +610,7 @@ pub async fn list(
 /// To list all templates simply type /list_numerically and press enter
 /// To list all substitutes within a template type /list_numerically and then the name of a template
 ///
-/// Example usage: **/list_numerically** template: **fruit**
+/// Example usage: **/list_numerically** template: **noun**
 #[poise::command(slash_command, prefix_command)]
 pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Result<(), Error> {
     say_list(

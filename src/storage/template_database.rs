@@ -158,11 +158,7 @@ impl TemplateDatabase {
         Ok(template_id.to_string())
     }
 
-    pub fn insert_sub<'a>(
-        &mut self,
-        template: &'a str,
-        substitute: &'a str,
-    ) -> rusqlite::Result<bool> {
+    pub fn insert_sub(&mut self, template: &str, substitute: &str) -> rusqlite::Result<bool> {
         let tx = self.db.transaction()?;
         Self::execute_insert_template(&tx, template)?;
         let template_id = Self::find_template_id_with_transaction(&tx, template)?;
@@ -207,7 +203,7 @@ impl TemplateDatabase {
 
     pub fn insert_subs<'a>(
         &mut self,
-        template: &'a str,
+        template: &str,
         substitutes: Option<&[&'a str]>,
     ) -> rusqlite::Result<UpdatedValues<'a>> {
         let mut change_log = UpdatedValues::new();
@@ -241,11 +237,7 @@ impl TemplateDatabase {
         Ok(result > 0)
     }
 
-    pub fn remove_sub<'a>(
-        &mut self,
-        template: &'a str,
-        substitute: &'a str,
-    ) -> rusqlite::Result<bool> {
+    pub fn remove_sub(&mut self, template: &str, substitute: &str) -> rusqlite::Result<bool> {
         let tx = self.db.transaction()?;
         let template_id = Self::find_template_id_with_transaction(&tx, template)?;
 
@@ -259,13 +251,13 @@ impl TemplateDatabase {
         Ok(result > 0)
     }
 
-    pub fn remove_sub_by_id<'a>(&mut self, template: &'a str, id: usize) -> rusqlite::Result<bool> {
+    pub fn remove_sub_by_id(&mut self, template: &str, id: usize) -> rusqlite::Result<bool> {
         let tx = self.db.transaction()?;
         let template_id = Self::find_template_id_with_transaction(&tx, template)?;
 
         let result = tx.execute(
-            "DELETE FROM substitutes WHERE id = ?2",
-            &[&template_id, &id.to_string()],
+            "DELETE FROM substitutes WHERE id = ?1 AND template_id = ?2",
+            &[&id.to_string(), &template_id],
         )?;
 
         tx.commit()?;
@@ -273,9 +265,34 @@ impl TemplateDatabase {
         Ok(result > 0)
     }
 
+    pub fn remove_subs_by_id(
+        &mut self,
+        template: &str,
+        ids: &[usize],
+    ) -> rusqlite::Result<Vec<usize>> {
+        let tx = self.db.transaction()?;
+        let template_id = Self::find_template_id_with_transaction(&tx, template)?;
+
+        let mut removed_ids: Vec<usize> = Vec::new();
+
+        for id in ids {
+            let result = tx.execute(
+                "DELETE FROM substitutes WHERE id = ?1 AND template_id = ?2",
+                &[&id.to_string(), &template_id],
+            )?;
+            if result > 0 {
+                removed_ids.push(*id);
+            }
+        }
+
+        tx.commit()?;
+
+        Ok(removed_ids)
+    }
+
     pub fn remove_subs<'a>(
         &mut self,
-        template: &'a str,
+        template: &str,
         substitutes: &[&'a str],
     ) -> rusqlite::Result<UpdatedValues<'a>> {
         let tx = self.db.transaction()?;
@@ -376,7 +393,7 @@ impl TemplateDatabase {
         let template_id = Self::find_template_id_with_transaction(&tx, template)?;
 
         let result = tx.execute(
-            "UPDATE substitutes SET name = ?1 WHERE id = ?2",
+            "UPDATE substitutes SET name = ?1 WHERE id = ?2 AND template_id = ?3",
             &[new_sub, &id.to_string(), &template_id],
         )?;
 
