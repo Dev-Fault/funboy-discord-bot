@@ -1,3 +1,9 @@
+use core::panic;
+
+use crate::io_utils::context_extension::MessageListFormatter;
+use crate::io_utils::custom_components::{
+    create_confirmation_interaction, CANCEL_BUTTON_ID, CONFIRM_BUTTON_ID,
+};
 use crate::io_utils::discord_message_format;
 use crate::text_interpolator::TextInterpolator;
 use crate::{
@@ -19,6 +25,8 @@ const ERROR_DATABASE_QUERY: &str = "Error: There was a problem querying the data
 const ERROR_GENERATION_FAILED: &str = "Error: Text generation failed.";
 const ERROR_TEMPLATE_TOO_LARGE: &str = "Error: Template was too large.";
 const ERROR_SUB_TOO_LARGE: &str = "Error: Substitute was too large.";
+const REMOVE_TEMPLATE_WARNING: &str =
+    "Are you sure you want to remove this template? All of it's substitutes will be deleted.";
 
 /// Add and create templates with multiple substitutes
 ///
@@ -58,9 +66,9 @@ pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Res
         Ok(inserted_subs) => {
             let output_log = OutputLog::from(subs, inserted_subs);
 
-            ctx.multi_say(
+            ctx.say_long(
                 &format!(
-                    "Added substitutes [{}] under template **\"**{}**\"**.",
+                    "Added substitutes [{}] to template **\"**{}**\"**.",
                     &output_log.present, &template
                 )[..],
                 false,
@@ -68,9 +76,9 @@ pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Res
             .await?;
 
             if output_log.not_present.len() > 0 {
-                ctx.multi_say(
+                ctx.say_long(
                     &format!(
-                        "Substitutes [{}] are already present under template **\"**{}**\"**.",
+                        "Substitutes [{}] were already present in template **\"**{}**\"**.",
                         &output_log.not_present, &template
                     )[..],
                     true,
@@ -107,18 +115,18 @@ pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> 
         }
         Ok(result) => {
             if result {
-                ctx.multi_say(
+                ctx.say_long(
                     &format!(
-                        "Added substitute **\"**{}**\"** under template **\"**{}**\"**.",
+                        "Added substitute **\"**{}**\"** to template **\"**{}**\"**.",
                         &substitute, &template
                     )[..],
                     false,
                 )
                 .await?;
             } else {
-                ctx.multi_say(
+                ctx.say_long(
                     &format!(
-                        "Substitute **\"**{}**\"** is already present under template **\"**{}**\"**.",
+                        "Substitute **\"**{}**\"** is already present in template **\"**{}**\"**.",
                         &substitute, &template
                     )[..],
                     true,
@@ -126,6 +134,59 @@ pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> 
                 .await?;
             }
         }
+    }
+
+    Ok(())
+}
+
+/// Copy substitutes from one template into another one
+///
+/// Example usage: **/copy_subs** from_template: **fruit** to_template: **produce**
+#[poise::command(slash_command, prefix_command)]
+pub async fn copy_subs(
+    ctx: Context<'_>,
+    from_template: String,
+    to_template: String,
+) -> Result<(), Error> {
+    let mut db = ctx.data().template_db.lock().await;
+
+    if let Ok(subs) = db.get_subs(&from_template) {
+        let subs: Vec<&str> = subs.iter().map(|s| s.as_str()).collect();
+
+        match db.insert_subs(&to_template, Some(&subs)) {
+            Err(e) => {
+                ctx.say_ephemeral(&e.to_string()).await?;
+            }
+            Ok(inserted_subs) => {
+                let output_log = OutputLog::from(subs, inserted_subs);
+
+                ctx.say_long(
+                    &format!(
+                        "Added substitutes [{}] to template **\"**{}**\"**.",
+                        &output_log.present, &to_template
+                    )[..],
+                    false,
+                )
+                .await?;
+
+                if output_log.not_present.len() > 0 {
+                    ctx.say_long(
+                        &format!(
+                            "Substitutes [{}] were already present in template **\"**{}**\"**.",
+                            &output_log.not_present, &to_template
+                        )[..],
+                        true,
+                    )
+                    .await?;
+                }
+            }
+        }
+    } else {
+        ctx.say_ephemeral(&format!(
+            "Error: Couldn't get any subs from template **\"**{}**\"**.",
+            &from_template
+        ))
+        .await?;
     }
 
     Ok(())
@@ -141,30 +202,61 @@ pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> 
 pub async fn remove_template(ctx: Context<'_>, template: String) -> Result<(), Error> {
     let mut db = ctx.data().template_db.lock().await;
 
-    match db.remove_template(&template) {
-        Err(e) => match e {
-            rusqlite::Error::QueryReturnedNoRows => {
-                ctx.say_ephemeral(&format!(
-                    "No template named **\"**{}**\"** exists.",
-                    &template
-                ))
-                .await?;
+    match create_confirmation_interaction(ctx, REMOVE_TEMPLATE_WARNING, 30).await? {
+        Some(interaction) => match interaction.data.custom_id.as_str() {
+            CANCEL_BUTTON_ID => {
+                interaction
+                    .create_response(
+                        ctx.http(),
+                        serenity::all::CreateInteractionResponse::Acknowledge,
+                    )
+                    .await?;
+
+                ctx.say_ephemeral("Command to remove template canceled.")
+                    .await?
+            }
+            CONFIRM_BUTTON_ID => {
+                interaction
+                    .create_response(
+                        ctx.http(),
+                        serenity::all::CreateInteractionResponse::Acknowledge,
+                    )
+                    .await?;
+
+                match db.remove_template(&template) {
+                    Err(e) => match e {
+                        rusqlite::Error::QueryReturnedNoRows => {
+                            ctx.say_ephemeral(&format!(
+                                "No template named **\"**{}**\"** exists.",
+                                &template
+                            ))
+                            .await?;
+                        }
+                        _ => {
+                            ctx.say_ephemeral(&e.to_string()).await?;
+                        }
+                    },
+                    Ok(result) => {
+                        if result {
+                            ctx.say(format!("Removed template **\"**{}**\"**.", &template))
+                                .await?;
+                        } else {
+                            ctx.say_ephemeral(&format!(
+                                "No template named **\"**{}**\"** exists.",
+                                &template
+                            ))
+                            .await?;
+                        }
+                    }
+                }
             }
             _ => {
-                ctx.say_ephemeral(&e.to_string()).await?;
+                panic!("Incorrect id for remove template confirmation interaction.")
             }
         },
-        Ok(result) => {
-            if result {
-                ctx.say(format!("Removed template **\"**{}**\"**.", &template))
-                    .await?;
-            } else {
-                ctx.say_ephemeral(&format!(
-                    "No template named **\"**{}**\"** exists.",
-                    &template
-                ))
+        None => {
+            ctx.say_ephemeral("Timeout: Command to remove template canceled.")
                 .await?;
-            }
         }
     }
 
@@ -197,7 +289,7 @@ pub async fn remove_sub(
         },
         Ok(result) => {
             if result {
-                ctx.multi_say(
+                ctx.say_long(
                     &format!(
                         "Removed substitute **\"**{}**\"** from template **\"**{}**\"**.",
                         substitute, template
@@ -206,7 +298,7 @@ pub async fn remove_sub(
                 )
                 .await?;
             } else {
-                ctx.multi_say(
+                ctx.say_long(
                     &format!(
                         "Substitute **\"**{}**\"** was not found in template **\"**{}**\"**.",
                         substitute, template
@@ -244,7 +336,7 @@ pub async fn remove_sub_by_id(ctx: Context<'_>, template: String, id: usize) -> 
         },
         Ok(result) => {
             if result {
-                ctx.multi_say(
+                ctx.say_long(
                     &format!(
                         "Removed substitute with id **{}** from template **\"**{}**\"**.",
                         id, template
@@ -253,7 +345,7 @@ pub async fn remove_sub_by_id(ctx: Context<'_>, template: String, id: usize) -> 
                 )
                 .await?;
             } else {
-                ctx.multi_say(
+                ctx.say_long(
                     &format!(
                         "Substitute with id **{}** was not found in template **\"**{}**\"**.",
                         id, template
@@ -298,7 +390,7 @@ pub async fn remove_subs(
         },
         Ok(removed_subs) => {
             let output_log = OutputLog::from(subs_to_remove, removed_subs);
-            ctx.multi_say(
+            ctx.say_long(
                 &format!(
                     "Removed substitutes [{}] from template **\"**{}**\"**.",
                     output_log.present, &template
@@ -307,7 +399,7 @@ pub async fn remove_subs(
             )
             .await?;
             if output_log.not_present.len() > 0 {
-                ctx.multi_say(
+                ctx.say_long(
                     &format!(
                         "Substitutes [{}] were not found in template **\"**{}**\"**.",
                         output_log.not_present, &template
@@ -381,7 +473,7 @@ pub async fn remove_subs_by_id(
                 }
             };
 
-            ctx.multi_say(&message[..], ephemeral).await?;
+            ctx.say_long(&message[..], ephemeral).await?;
 
             let ignored_ids: Vec<usize> = subs_to_remove
                 .iter()
@@ -389,7 +481,7 @@ pub async fn remove_subs_by_id(
                 .map(|id| *id)
                 .collect();
             if ignored_ids.len() > 0 {
-                ctx.multi_say(
+                ctx.say_long(
                     &format!(
                         "Substitutes with ids {:?} were not found in template **\"**{}**\"**.",
                         ignored_ids, &template
@@ -437,7 +529,7 @@ pub async fn replace_sub(
             },
             Ok(result) => {
                 if result {
-                    ctx.multi_say(
+                    ctx.say_long(
                             &format!(
                                 "Renamed substitute **\"**{}**\"** to **\"**{}**\"** in template **\"**{}**\"**.",
                                 old_sub, new_sub, template
@@ -446,7 +538,7 @@ pub async fn replace_sub(
                         )
                         .await?;
                 } else {
-                    ctx.multi_say(
+                    ctx.say_long(
                         &format!(
                             "No substitute exists in template **\"**{}**\"** named **\"**{}**\"**.",
                             template, old_sub
@@ -494,7 +586,7 @@ pub async fn replace_sub_by_id(
             },
             Ok(result) => {
                 if result {
-                    ctx.multi_say(
+                    ctx.say_long(
                             &format!(
                                 "Renamed substitute with id **{}** to **\"**{}**\"** in template **\"**{}**\"**.",
                                 id, new_sub, template
@@ -503,7 +595,7 @@ pub async fn replace_sub_by_id(
                         )
                         .await?;
                 } else {
-                    ctx.multi_say(
+                    ctx.say_long(
                         &format!(
                             "No substitute exists in template **\"**{}**\"** with id **{}**.",
                             template, id
@@ -563,7 +655,7 @@ pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Resu
 async fn say_list(
     ctx: Context<'_>,
     template: Option<String>,
-    formatter: fn(Vec<&str>) -> Vec<String>,
+    formatter: MessageListFormatter,
     show_ids: bool,
 ) -> Result<(), Error> {
     let db = ctx.data().template_db.lock().await;
@@ -588,15 +680,21 @@ async fn say_list(
                             })
                             .collect();
 
-                        ctx.say_vec(
-                            subs_with_ids.iter().map(|s| s.as_str()).collect(),
+                        ctx.say_list(
+                            &subs_with_ids
+                                .iter()
+                                .map(|s| s.as_str())
+                                .collect::<Vec<&str>>()[..],
                             true,
                             None,
                         )
                         .await?;
                     } else {
-                        ctx.say_vec(
-                            subs.iter().map(|record| record.name.as_str()).collect(),
+                        ctx.say_list(
+                            &subs
+                                .iter()
+                                .map(|record| record.name.as_str())
+                                .collect::<Vec<&str>>()[..],
                             true,
                             Some(formatter),
                         )
@@ -621,8 +719,8 @@ async fn say_list(
                 if tmps.is_empty() {
                     ctx.say_ephemeral(ERROR_NO_TEMPLATES).await?;
                 } else {
-                    ctx.say_vec(
-                        tmps.iter().map(|s| s.as_str()).collect(),
+                    ctx.say_list(
+                        &tmps.iter().map(|s| s.as_str()).collect::<Vec<&str>>()[..],
                         true,
                         Some(formatter),
                     )
@@ -713,7 +811,7 @@ pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
     match output {
         Ok(output) => {
             match interpret_code(&output) {
-                Ok(o) => ctx.multi_say(&o, false).await?,
+                Ok(o) => ctx.say_long(&o, false).await?,
                 Err(e) => ctx.say_ephemeral(&format!("Error: {}.", &e)[..]).await?,
             };
         }

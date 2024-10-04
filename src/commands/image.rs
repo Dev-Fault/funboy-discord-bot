@@ -8,6 +8,7 @@ struct ImgurResponse {
 }
 
 #[derive(Deserialize, Debug)]
+#[allow(dead_code)]
 struct ImgurImage {
     link: String,
     title: Option<String>,

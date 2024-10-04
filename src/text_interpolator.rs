@@ -37,6 +37,7 @@ pub type ExtractTemplateFn = fn(&str) -> TemplateSplit;
 
 #[derive(Debug)]
 pub struct TextInterpolator {
+    #[allow(dead_code)]
     pub is_template: IsTemplateFn,
     pub extract_template: ExtractTemplateFn,
     template_set: HashSet<String>,
@@ -78,6 +79,7 @@ impl TextInterpolator {
     ///     }
     /// );
     /// ```
+    #[allow(dead_code)]
     pub fn new(is_template: IsTemplateFn, extract_template: ExtractTemplateFn) -> Self {
         TextInterpolator {
             is_template,

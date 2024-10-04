@@ -1,8 +1,8 @@
 use std::sync::Arc;
 
 use ::serenity::all::{ClientBuilder, FullEvent, GatewayIntents, Interaction};
+use io_utils::custom_components::{CustomComponent, TrackComponent};
 use reqwest::Client as HttpClient;
-use serenity::all::ComponentInteraction;
 use songbird::{typemap::TypeMapKey, SerenityInit};
 use storage::template_database::TemplateDatabase;
 use tokio::sync::Mutex;
@@ -14,7 +14,7 @@ mod io_utils;
 mod storage;
 mod text_interpolator;
 
-use commands::sound::{TrackComponent, TrackList, TRACK_BUTTON_ID};
+use commands::sound::TrackList;
 
 pub const FUNBOY_DB_PATH: &str = "funboy.db";
 
@@ -31,11 +31,6 @@ struct HttpKey;
 
 impl TypeMapKey for HttpKey {
     type Value = HttpClient;
-}
-
-enum CustomComponent {
-    TrackComponent,
-    Invalid,
 }
 
 #[tokio::main]
@@ -55,6 +50,7 @@ async fn main() {
                 commands::random::random_number(),
                 commands::random::random_word(),
                 commands::text_gen::add(),
+                commands::text_gen::copy_subs(),
                 commands::text_gen::add_sub(),
                 commands::text_gen::remove_sub(),
                 commands::text_gen::remove_sub_by_id(),
@@ -80,7 +76,7 @@ async fn main() {
                     match event {
                         FullEvent::InteractionCreate {
                             interaction: Interaction::Component(component_interaction),
-                        } => match get_component_type(component_interaction) {
+                        } => match CustomComponent::from(component_interaction) {
                             CustomComponent::TrackComponent => {
                                 commands::sound::on_track_button_click(
                                     ctx,
@@ -89,7 +85,7 @@ async fn main() {
                                 )
                                 .await?;
                             }
-                            CustomComponent::Invalid => {}
+                            CustomComponent::None => {}
                         },
                         _ => {}
                     }
@@ -121,16 +117,4 @@ async fn main() {
         .await;
 
     client.unwrap().start().await.unwrap();
-}
-
-fn get_component_type(component_interaction: &ComponentInteraction) -> CustomComponent {
-    if component_interaction
-        .data
-        .custom_id
-        .starts_with(TRACK_BUTTON_ID)
-    {
-        return CustomComponent::TrackComponent;
-    } else {
-        return CustomComponent::Invalid;
-    }
 }

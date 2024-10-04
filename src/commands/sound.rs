@@ -1,10 +1,16 @@
 use std::{sync::Arc, time::Duration};
 
-use crate::{io_utils::context_extension::ContextExtension, Data, HttpClient};
+use crate::{
+    io_utils::{
+        context_extension::ContextExtension,
+        custom_components::{create_track_button, TrackComponent},
+    },
+    Data, HttpClient,
+};
 use poise::{serenity_prelude::async_trait, CreateReply};
 use serenity::all::{
-    CacheHttp, ComponentInteraction, CreateActionRow, CreateButton, CreateInteractionResponse,
-    CreateInteractionResponseMessage, EditInteractionResponse,
+    CacheHttp, CreateActionRow, CreateInteractionResponse, CreateInteractionResponseMessage,
+    EditInteractionResponse,
 };
 use songbird::{
     events::{Event, EventContext, EventHandler as VoiceEventHandler, TrackEvent},
@@ -26,7 +32,6 @@ const STOP_AUDIO_NOTIF: &str = "Stopping all audio.";
 const NON_EXISTANT_TRACK_ERROR: &str = "Error: Track no longer exists.";
 const NO_TRACKS_PLAYING_NOTIF: &str = "No tracks are currently playing.";
 
-pub const TRACK_BUTTON_ID: &str = "track";
 pub const PLAY_PAUSE: &str = "Play/Pause";
 pub const STOP: &str = "Stop";
 pub const VOLUME_UP: &str = "Volume_Up";
@@ -141,38 +146,6 @@ impl VoiceEventHandler for TrackErrorNotifier {
         }
 
         None
-    }
-}
-
-pub struct TrackComponent {
-    interaction: ComponentInteraction,
-    track_id: String,
-    track_command: String,
-}
-
-impl TrackComponent {
-    pub fn new(component_interaction: ComponentInteraction) -> Self {
-        let track_id = component_interaction
-            .data
-            .custom_id
-            .split_whitespace()
-            .nth(1)
-            .expect("Track button id should contain track id.")
-            .to_string();
-
-        let track_command = component_interaction
-            .data
-            .custom_id
-            .split_whitespace()
-            .nth(2)
-            .expect("Track button id should contain track command.")
-            .to_string();
-
-        TrackComponent {
-            interaction: component_interaction,
-            track_id,
-            track_command,
-        }
     }
 }
 
@@ -339,15 +312,7 @@ pub async fn show_tracks(ctx: Context<'_>) -> Result<(), Error> {
         for track in tracks.iter() {
             let mut buttons = Vec::new();
             for command in TRACK_COMMANDS {
-                buttons.push(
-                    CreateButton::new(format!(
-                        "{} {} {}",
-                        TRACK_BUTTON_ID,
-                        &track.handle.uuid(),
-                        command
-                    ))
-                    .label(command.replace("_", " ")),
-                );
+                buttons.push(create_track_button(track.handle.uuid(), command));
             }
 
             ctx.send(
@@ -374,10 +339,10 @@ pub async fn on_track_button_click(
         .track_list
         .lock()
         .await
-        .get_track(&track_component.track_id)
+        .get_track(track_component.get_track_id())
     {
         if let Ok(track_state) = track.handle.get_info().await {
-            match &track_component.track_command[..] {
+            match track_component.get_track_command() {
                 PLAY_PAUSE => match track_state.playing {
                     songbird::tracks::PlayMode::Play => {
                         let _ = track.handle.pause();
@@ -415,12 +380,12 @@ pub async fn on_track_button_click(
         }
 
         track_component
-            .interaction
+            .get_interaction()
             .create_response(ctx.http(), CreateInteractionResponse::Acknowledge)
             .await?;
 
         track_component
-            .interaction
+            .get_interaction()
             .edit_response(
                 ctx.http(),
                 EditInteractionResponse::default().content(track.get_description().await),
@@ -428,7 +393,7 @@ pub async fn on_track_button_click(
             .await?;
     } else {
         track_component
-            .interaction
+            .get_interaction()
             .create_response(
                 ctx.http(),
                 CreateInteractionResponse::Message(

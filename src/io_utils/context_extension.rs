@@ -8,27 +8,27 @@ pub const MESSAGE_BYTE_LIMIT: usize = DISCORD_CHARACTER_LIMIT * 4;
 pub const WARN_MESSAGE_SIZE_EXCEEDED: &str = "Message was too large to send.";
 pub const WARN_EMPTY_MESSAGE: &str = "Message was empty.";
 
-pub type VectorMessageFormatter = fn(Vec<&str>) -> Vec<String>;
+pub type MessageListFormatter = fn(&[&str]) -> Vec<String>;
 
 pub trait ContextExtension {
-    async fn say_vec(
+    async fn say_list(
         &self,
-        message: Vec<&str>,
+        message: &[&str],
         ephemeral: bool,
-        formatter: Option<VectorMessageFormatter>,
+        formatter: Option<MessageListFormatter>,
     ) -> Result<(), Error>;
 
     async fn say_ephemeral(&self, message: &str) -> Result<(), Error>;
 
-    async fn multi_say(&self, message: &str, ephemeral: bool) -> Result<(), Error>;
+    async fn say_long(&self, message: &str, ephemeral: bool) -> Result<(), Error>;
 }
 
 impl<'a> ContextExtension for Context<'a> {
-    async fn say_vec(
+    async fn say_list(
         &self,
-        message: Vec<&str>,
+        message: &[&str],
         ephemeral: bool,
-        formatter: Option<VectorMessageFormatter>,
+        formatter: Option<MessageListFormatter>,
     ) -> Result<(), Error> {
         let mut size: usize = 0;
 
@@ -48,7 +48,10 @@ impl<'a> ContextExtension for Context<'a> {
         let message = match formatter {
             Some(formatter) => {
                 formatted_message = formatter(message);
-                formatted_message.iter().map(|msg| msg.as_str()).collect()
+                &formatted_message
+                    .iter()
+                    .map(|msg| msg.as_str())
+                    .collect::<Vec<&str>>()[..]
             }
             None => message,
         };
@@ -83,7 +86,7 @@ impl<'a> ContextExtension for Context<'a> {
         Ok(())
     }
 
-    async fn multi_say(&self, message: &str, ephemeral: bool) -> Result<(), Error> {
+    async fn say_long(&self, message: &str, ephemeral: bool) -> Result<(), Error> {
         if !ephemeral && message.len() > MESSAGE_BYTE_LIMIT {
             self.say_ephemeral(WARN_MESSAGE_SIZE_EXCEEDED).await?;
             return Ok(());
