@@ -46,7 +46,6 @@ pub const NEW_LINE: &str = "nl";
 pub const SELECT_RANDOM: &str = "select_random";
 pub const GET_SUB: &str = "get_sub";
 
-// TODO:
 // Lists and Text
 pub const INDEX: &str = "index";
 pub const SLICE: &str = "slice";
@@ -54,7 +53,7 @@ pub const LENGTH: &str = "length";
 pub const SWAP: &str = "swap";
 pub const INSERT: &str = "insert";
 pub const REMOVE: &str = "remove";
-pub const UPDATE: &str = "update";
+pub const REPLACE: &str = "replace";
 
 // Control flow
 pub const IF_THEN: &str = "if_then";
@@ -93,6 +92,13 @@ pub enum CommandType {
     EndsWith,
     GetSub,
     NewLine,
+    Index,
+    Slice,
+    Length,
+    Swap,
+    Insert,
+    Remove,
+    Replace,
 }
 
 impl CommandType {
@@ -127,6 +133,13 @@ impl CommandType {
             CommandType::NewLine => NEW_LINE,
             CommandType::Mod => MOD,
             CommandType::While => WHILE,
+            CommandType::Index => INDEX,
+            CommandType::Slice => SLICE,
+            CommandType::Length => LENGTH,
+            CommandType::Swap => SWAP,
+            CommandType::Insert => INSERT,
+            CommandType::Remove => REMOVE,
+            CommandType::Replace => REPLACE,
         }
     }
 
@@ -173,6 +186,13 @@ impl FromStr for CommandType {
             ENDS_WITH => Ok(CommandType::EndsWith),
             GET_SUB => Ok(CommandType::GetSub),
             NEW_LINE => Ok(CommandType::NewLine),
+            INDEX => Ok(CommandType::Index),
+            SLICE => Ok(CommandType::Slice),
+            LENGTH => Ok(CommandType::Length),
+            SWAP => Ok(CommandType::Swap),
+            INSERT => Ok(CommandType::Insert),
+            REMOVE => Ok(CommandType::Remove),
+            REPLACE => Ok(CommandType::Replace),
             _ => Err(format!("Invalid command {}", s)),
         }
     }
@@ -234,7 +254,7 @@ impl ToString for ValueType {
                     .iter()
                     .map(|value| value.to_string() + ", ")
                     .collect();
-                format!("[{}]", &list_string[0..list_string.len() - 1])
+                format!("[{}]", &list_string[0..list_string.len() - 2])
             }
             ValueType::Identifier(value) => value.to_string(),
             ValueType::Command(value) => value.command_type.to_str().to_string(),

@@ -398,9 +398,9 @@ impl Interpreter {
                 }
             }
             CommandType::Copy => {
-                if args.len() != 2 {
-                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
-                } else {
+                if args.len() < 2 {
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
+                } else if args.len() == 2 {
                     if let ValueType::Identifier(identifier) = &args[1] {
                         match &args[0] {
                             ValueType::Identifier(_) => {
@@ -423,6 +423,36 @@ impl Interpreter {
                         }
                     } else {
                         return Err(command_type.gen_err(ERROR_ARG_TWO_MUST_BE_IDENTIFIER));
+                    }
+                } else {
+                    if let ValueType::Identifier(identifier) = &args[args.len() - 1] {
+                        let mut list: Vec<ValueType> = Vec::new();
+                        for arg in &args[0..args.len() - 1] {
+                            match arg {
+                                ValueType::Identifier(_) => {
+                                    return Err(
+                                        command_type.gen_err("cannot store arg of type Identifier")
+                                    );
+                                }
+                                ValueType::None => {
+                                    return Err(
+                                        command_type.gen_err("cannot store arg of type None")
+                                    );
+                                }
+                                _ => list.push(arg.clone()),
+                            };
+                        }
+                        match self
+                            .vars
+                            .insert_var(identifier.to_string(), ValueType::List(list))
+                        {
+                            Ok(_) => return Ok(ValueType::None),
+                            Err(e) => {
+                                return Err(e);
+                            }
+                        }
+                    } else {
+                        return Err(command_type.gen_err("last arg must be of type Identifier"));
                     }
                 }
             }
@@ -764,6 +794,253 @@ impl Interpreter {
                         };
 
                         loop_count = loop_count.saturating_add(1);
+                    }
+                }
+            }
+            CommandType::Index => {
+                if args.len() != 2 {
+                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
+                } else {
+                    match &args[0] {
+                        ValueType::Int(i) => match &args[1] {
+                            ValueType::Text(value) => match value.chars().nth(*i as usize) {
+                                Some(c) => return Ok(ValueType::Text(c.to_string())),
+                                None => return Err(command_type.gen_err("index out of bounds")),
+                            },
+                            ValueType::List(value) => match value.get(*i as usize) {
+                                Some(value_type) => Ok(value_type.clone()),
+                                None => return Err(command_type.gen_err("index out of bounds")),
+                            },
+                            _ => {
+                                return Err(command_type
+                                    .gen_err("second argument must be of type Text or List"))
+                            }
+                        },
+                        _ => {
+                            return Err(
+                                command_type.gen_err("first argument must be of type Integer")
+                            )
+                        }
+                    }
+                }
+            }
+            CommandType::Slice => {
+                if args.len() != 3 {
+                    return Err(command_type.gen_err(ERROR_EXACTLY_THREE_ARGS));
+                } else {
+                    match (&args[0], &args[1]) {
+                        (ValueType::Int(a), ValueType::Int(b)) => {
+                            let a = *a as usize;
+                            let b = *b as usize;
+
+                            match &args[2] {
+                                ValueType::Text(value) => {
+                                    if a >= b {
+                                        return Err(command_type.gen_err(
+                                            "first argument must be less than second argument",
+                                        ));
+                                    } else if a > value.len() || b > value.len() {
+                                        return Err(command_type.gen_err("index out of bounds"));
+                                    } else {
+                                        return Ok(ValueType::Text(value[a..b].to_string()));
+                                    }
+                                }
+                                ValueType::List(values) => {
+                                    if a >= b {
+                                        return Err(command_type.gen_err(
+                                            "first argument must be less than second argument",
+                                        ));
+                                    } else if a > values.len() || b > values.len() {
+                                        return Err(command_type.gen_err("index out of bounds"));
+                                    } else {
+                                        return Ok(ValueType::List(values[a..b].to_vec()));
+                                    }
+                                }
+                                _ => {
+                                    return Err(command_type
+                                        .gen_err("third argument must be of type Text or List"))
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(
+                                command_type.gen_err("first two arguments must be of type Integer")
+                            )
+                        }
+                    }
+                }
+            }
+            CommandType::Length => {
+                if args.len() != 1 {
+                    return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
+                } else {
+                    match &args[0] {
+                        ValueType::Text(value) => Ok(ValueType::Int(value.len() as i64)),
+                        ValueType::List(values) => Ok(ValueType::Int(values.len() as i64)),
+                        _ => {
+                            return Err(
+                                command_type.gen_err("first argument must be of type Text or List")
+                            )
+                        }
+                    }
+                }
+            }
+            CommandType::Swap => {
+                if args.len() != 3 {
+                    return Err(command_type.gen_err(ERROR_EXACTLY_THREE_ARGS));
+                } else {
+                    match (&args[0], &args[1]) {
+                        (ValueType::Int(a), ValueType::Int(b)) => {
+                            let a = *a as usize;
+                            let b = *b as usize;
+
+                            match &args[2] {
+                                ValueType::Text(value) => {
+                                    if a > value.len() || b > value.len() {
+                                        return Err(command_type.gen_err("index out of bounds"));
+                                    } else {
+                                        let mut chars: Vec<_> = value.chars().collect();
+                                        chars.swap(a, b);
+                                        return Ok(ValueType::Text(chars.into_iter().collect()));
+                                    }
+                                }
+                                ValueType::List(values) => {
+                                    if a > values.len() || b > values.len() {
+                                        return Err(command_type.gen_err("index out of bounds"));
+                                    } else {
+                                        let mut values = values.clone();
+                                        values.swap(a, b);
+                                        return Ok(ValueType::List(values));
+                                    }
+                                }
+                                _ => {
+                                    return Err(command_type
+                                        .gen_err("third argument must be of type Text or List"))
+                                }
+                            }
+                        }
+                        _ => {
+                            return Err(
+                                command_type.gen_err("first two arguments must be of type Integer")
+                            )
+                        }
+                    }
+                }
+            }
+            CommandType::Insert => {
+                if args.len() != 3 {
+                    return Err(command_type.gen_err(ERROR_EXACTLY_THREE_ARGS));
+                } else {
+                    match &args[1] {
+                        ValueType::Int(i) => {
+                            let i = *i as usize;
+
+                            match &args[2] {
+                                ValueType::Text(value) => match &args[0] {
+                                    ValueType::Text(text) => {
+                                        if i > value.len() {
+                                            return Err(command_type.gen_err("index out of bounds"));
+                                        } else {
+                                            let mut value = value.to_string();
+                                            value.insert_str(i, text);
+                                            return Ok(ValueType::Text(value));
+                                        }
+                                    },
+                                    _ => Err(command_type.gen_err("first argument must be of type Text when inserting into type Text")),
+                                },
+                                ValueType::List(values) => match &args[0] {
+                                    ValueType::Identifier(_) => Err(command_type.gen_err("cannot insert values of type Identifier into type List")),
+                                    ValueType::None => Err(command_type.gen_err("cannot insert values of type None into type List")),
+                                    _ => {
+                                        if i > values.len() {
+                                            return Err(command_type.gen_err("index out of bounds"));
+                                        } else {
+                                            let mut values = values.to_vec();
+                                            values.insert(i, args[0].clone());
+                                            return Ok(ValueType::List(values));
+                                        }
+                                    }
+                                },
+                                _ => Err(command_type
+                                    .gen_err("third argument must be of type Text or List")),
+                            }
+                        }
+                        _ => Err(command_type.gen_err("second argument must be of type Integer")),
+                    }
+                }
+            }
+            CommandType::Remove => {
+                if args.len() != 2 {
+                    return Err(command_type.gen_err(ERROR_EXACTLY_TWO_ARGS));
+                } else {
+                    match &args[0] {
+                        ValueType::Int(i) => {
+                            let i = *i as usize;
+
+                            match &args[1] {
+                                ValueType::Text(value) => {
+                                    if i >= value.len() {
+                                        return Err(command_type.gen_err("index out of bounds"));
+                                    } else {
+                                        let mut value = value.to_string();
+                                        value.remove(i);
+                                        return Ok(ValueType::Text(value));
+                                    }
+                                }
+                                ValueType::List(values) => {
+                                    if i >= values.len() {
+                                        return Err(command_type.gen_err("index out of bounds"));
+                                    } else {
+                                        let mut values = values.to_vec();
+                                        values.remove(i);
+                                        return Ok(ValueType::List(values));
+                                    }
+                                }
+                                _ => Err(command_type
+                                    .gen_err("second argument must be of type Text or type List")),
+                            }
+                        }
+                        _ => Err(command_type.gen_err("first argument must be of type Integer")),
+                    }
+                }
+            }
+            CommandType::Replace => {
+                if args.len() != 3 {
+                    return Err(command_type.gen_err(ERROR_EXACTLY_THREE_ARGS));
+                } else {
+                    match &args[1] {
+                        ValueType::Int(i) => {
+                            let i = *i as usize;
+
+                            match &args[2] {
+                                ValueType::Text(value) => match &args[0] {
+                                    ValueType::Text(text) => {
+                                        if i >= value.len() {
+                                            return Err(command_type.gen_err("index out of bounds"));
+                                        } else {
+                                            return Ok(ValueType::Text(value[0..i].to_string() + text + &value[i+1..value.len()]));
+                                        }
+                                    },
+                                    _ => Err(command_type.gen_err("first argument must be of type Text when inserting into type Text")),
+                                },
+                                ValueType::List(values) => match &args[0] {
+                                    ValueType::Identifier(_) => Err(command_type.gen_err("cannot insert values of type Identifier into type List")),
+                                    ValueType::None => Err(command_type.gen_err("cannot insert values of type None into type List")),
+                                    _ => {
+                                        if i >= values.len() {
+                                            return Err(command_type.gen_err("index out of bounds"));
+                                        } else {
+                                            let mut values = values.to_vec();
+                                            values[i] = args[0].clone();
+                                            return Ok(ValueType::List(values));
+                                        }
+                                    }
+                                },
+                                _ => Err(command_type
+                                    .gen_err("third argument must be of type Text or List")),
+                            }
+                        }
+                        _ => Err(command_type.gen_err("second argument must be of type Integer")),
                     }
                 }
             }
