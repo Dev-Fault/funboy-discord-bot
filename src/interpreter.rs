@@ -12,7 +12,7 @@ mod lexer;
 #[allow(dead_code)]
 mod parser;
 
-const REPEAT_LIMIT: u16 = u16::MAX;
+const LOOP_LIMIT: u16 = u16::MAX;
 const VAR_MAP_BYTE_LIMIT: usize = 65535 * 100;
 const OUTPUT_BYTE_LIMIT: usize = MESSAGE_BYTE_LIMIT;
 
@@ -29,12 +29,17 @@ const ERROR_ARG_MUST_BE_NUMBER: &str = "argument must be of type Number";
 const ERROR_ARG_MUST_BE_IDENTIFIER: &str = "argument must be of type Identifier";
 const ERROR_ARG_ONE_MUST_BE_WHOLE_NUMBER: &str = "first argument must be a whole number";
 const ERROR_ARG_ONE_MUST_BE_BOOL: &str = "first argument must be of type Bool";
+const ERROR_ARG_ONE_MUST_BE_COMMAND_BOOL: &str =
+    "first argument must be a command that evaluates to a boolean value";
+const ERROR_ARG_ONE_MUST_BE_COMMAND: &str = "first argument must be of type Command";
+
 const ERROR_ARGS_AFTER_ARG_ONE_MUST_BE_COMMAND: &str =
     "arguments following first argument must be of type Command";
 const ERROR_ARG_ONE_MUST_NOT_BE_IDENTIFIER: &str = "first argument must not be of type Identifier";
 const ERROR_ARG_ONE_MUST_NOT_BE_NONE: &str = "first argument must not be of type None";
 const ERROR_ARG_TWO_MUST_BE_IDENTIFIER: &str = "second argument must be of type Identifier";
-const ERROR_UNKNOWN_IDENTIFIER: &str = "No identifier exists named";
+const ERROR_UNKNOWN_IDENTIFIER: &str = "no identifier exists named";
+const ERROR_ZERO_DIVISION: &str = "division by zero";
 
 #[derive(Debug)]
 pub struct VarMap {
@@ -111,7 +116,7 @@ impl Interpreter {
 
     fn eval_command(&mut self, command: Command) -> Result<ValueType, String> {
         let mut args: Vec<ValueType> = Vec::new();
-        let mut args_contain_float = false;
+        let mut has_float_arg = false;
         let mut i = 0;
 
         for arg in command.args {
@@ -121,18 +126,20 @@ impl Interpreter {
                         CommandType::IfThen if i == 1 => args.push(arg),
                         CommandType::IfThenElse if i == 1 || i == 2 => args.push(arg),
                         CommandType::Repeat if i != 0 => args.push(arg),
+                        CommandType::While => args.push(arg),
                         _ => args.push(self.eval_command(sub_command.clone())?),
                     };
                 }
                 ValueType::Text(_) => args.push(arg),
                 ValueType::Int(_) => args.push(arg),
                 ValueType::Float(_) => {
-                    args_contain_float = true;
+                    has_float_arg = true;
                     args.push(arg)
                 }
                 ValueType::Identifier(_) => args.push(arg),
                 ValueType::None => args.push(arg),
                 ValueType::Bool(_) => args.push(arg),
+                ValueType::List(_) => args.push(arg),
             }
             i += 1;
         }
@@ -143,7 +150,7 @@ impl Interpreter {
             CommandType::Add => {
                 if args.len() < 2 {
                     return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
-                } else if args_contain_float {
+                } else if has_float_arg {
                     if let Some(mut sum) = args[0].extract_float() {
                         for arg in &args[1..args.len()] {
                             match arg.extract_float() {
@@ -176,7 +183,7 @@ impl Interpreter {
             CommandType::Subtract => {
                 if args.len() < 2 {
                     return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
-                } else if args_contain_float {
+                } else if has_float_arg {
                     if let Some(mut diff) = args[0].extract_float() {
                         for arg in &args[1..args.len()] {
                             match arg.extract_float() {
@@ -211,7 +218,7 @@ impl Interpreter {
             CommandType::Multiply => {
                 if args.len() < 2 {
                     return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
-                } else if args_contain_float {
+                } else if has_float_arg {
                     if let Some(mut sum) = args[0].extract_float() {
                         for arg in &args[1..args.len()] {
                             match arg.extract_float() {
@@ -246,7 +253,7 @@ impl Interpreter {
             CommandType::Divide => {
                 if args.len() < 2 {
                     return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
-                } else if args_contain_float {
+                } else if has_float_arg {
                     if let Some(mut sum) = args[0].extract_float() {
                         for arg in &args[1..args.len()] {
                             match arg.extract_float() {
@@ -265,7 +272,13 @@ impl Interpreter {
                     if let Some(mut sum) = args[0].extract_int() {
                         for arg in &args[1..args.len()] {
                             match arg.extract_int() {
-                                Some(value) => sum /= value,
+                                Some(value) => {
+                                    if value == 0 {
+                                        return Err(command_type.gen_err(ERROR_ZERO_DIVISION));
+                                    } else {
+                                        sum /= value
+                                    }
+                                }
                                 None => {
                                     return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
                                 }
@@ -360,10 +373,10 @@ impl Interpreter {
                 } else {
                     match &args[0] {
                         ValueType::Int(value) => {
-                            if *value > REPEAT_LIMIT.into() {
+                            if *value > LOOP_LIMIT.into() {
                                 return Err(command_type.gen_err(&format!(
                                     "must not exceed more than {} repetitions",
-                                    REPEAT_LIMIT
+                                    LOOP_LIMIT
                                 )));
                             }
                             for _i in 0..*value {
@@ -671,6 +684,87 @@ impl Interpreter {
                     Err(command_type.gen_err(ERROR_NO_ARGS))
                 } else {
                     Ok(ValueType::Text("\n".to_string()))
+                }
+            }
+            CommandType::Mod => {
+                if args.len() < 2 {
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
+                } else if has_float_arg {
+                    if let Some(mut sum) = args[0].extract_float() {
+                        for arg in &args[1..args.len()] {
+                            match arg.extract_float() {
+                                Some(value) => sum %= value,
+                                None => {
+                                    return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
+                                }
+                            }
+                        }
+
+                        Ok(ValueType::Float(sum))
+                    } else {
+                        return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
+                    }
+                } else {
+                    if let Some(mut sum) = args[0].extract_int() {
+                        for arg in &args[1..args.len()] {
+                            match arg.extract_int() {
+                                Some(value) => {
+                                    if value == 0 {
+                                        return Err(command_type.gen_err(ERROR_ZERO_DIVISION));
+                                    } else {
+                                        sum %= value
+                                    }
+                                }
+                                None => {
+                                    return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
+                                }
+                            }
+                        }
+
+                        Ok(ValueType::Int(sum))
+                    } else {
+                        return Err(command_type.gen_err(ERROR_ARGS_MUST_BE_NUMBER));
+                    }
+                }
+            }
+            CommandType::While => {
+                if args.len() < 2 {
+                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
+                } else {
+                    let mut loop_count: u16 = 0;
+
+                    loop {
+                        match &args[0] {
+                            ValueType::Command(command) => {
+                                match self.eval_command(command.clone())? {
+                                    ValueType::Bool(value) => {
+                                        if value && loop_count != LOOP_LIMIT {
+                                            for arg in &args[1..args.len()] {
+                                                if let ValueType::Command(command) = arg {
+                                                    self.eval_command(command.clone())?;
+                                                } else {
+                                                    return Err(command_type.gen_err(
+                                                        ERROR_ARGS_AFTER_ARG_ONE_MUST_BE_COMMAND,
+                                                    ));
+                                                };
+                                            }
+                                        } else {
+                                            return Ok(ValueType::None);
+                                        }
+                                    }
+                                    _ => {
+                                        return Err(command_type
+                                            .gen_err(ERROR_ARG_ONE_MUST_BE_COMMAND_BOOL))
+                                    }
+                                }
+                            }
+                            _ => {
+                                return Err(command_type.gen_err(ERROR_ARG_ONE_MUST_BE_COMMAND_BOOL))
+                            }
+                        };
+
+                        loop_count = loop_count.saturating_add(1);
+                    }
                 }
             }
         }

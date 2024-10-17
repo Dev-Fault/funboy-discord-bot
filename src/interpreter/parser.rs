@@ -20,7 +20,6 @@ pub const ADD: &str = "add";
 pub const SUBTRACT: &str = "sub";
 pub const MULTIPLY: &str = "mul";
 pub const DIVIDE: &str = "div";
-// TODO:
 pub const MOD: &str = "mod";
 pub const GT: &str = "gt";
 pub const LT: &str = "lt";
@@ -28,8 +27,6 @@ pub const RANDOM_RANGE: &str = "random_range";
 
 // Variables
 pub const COPY: &str = "copy";
-// TODO:
-pub const COPY_COMMAND: &str = "copy_command";
 pub const PASTE: &str = "paste";
 
 // Booleans
@@ -63,38 +60,7 @@ pub const UPDATE: &str = "update";
 pub const IF_THEN: &str = "if_then";
 pub const IF_THEN_ELSE: &str = "if_then_else";
 pub const REPEAT: &str = "repeat";
-// TODO:
-pub const DO_WHILE: &str = "do_while";
-
-const COMMAND_COUNT: usize = 26;
-const COMMANDS: [&str; COMMAND_COUNT] = [
-    ADD,
-    SUBTRACT,
-    MULTIPLY,
-    DIVIDE,
-    SELECT_RANDOM,
-    RANDOM_RANGE,
-    CAPITALIZE,
-    UPPER,
-    LOWER,
-    REPEAT,
-    COPY,
-    PASTE,
-    PRINT,
-    CONCATENATE,
-    IF_THEN,
-    IF_THEN_ELSE,
-    NOT,
-    AND,
-    OR,
-    EQ,
-    GT,
-    LT,
-    STARTS_WITH,
-    ENDS_WITH,
-    GET_SUB,
-    NEW_LINE,
-];
+pub const WHILE: &str = "while";
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum CommandType {
@@ -102,6 +68,7 @@ pub enum CommandType {
     Subtract,
     Multiply,
     Divide,
+    Mod,
     SelectRandom,
     RandomRange,
     Capitalize,
@@ -109,6 +76,7 @@ pub enum CommandType {
     Lower,
     RemoveWhitespace,
     Repeat,
+    While,
     Copy,
     Paste,
     Print,
@@ -157,6 +125,8 @@ impl CommandType {
             CommandType::EndsWith => ENDS_WITH,
             CommandType::GetSub => GET_SUB,
             CommandType::NewLine => NEW_LINE,
+            CommandType::Mod => MOD,
+            CommandType::While => WHILE,
         }
     }
 
@@ -178,12 +148,14 @@ impl FromStr for CommandType {
             SUBTRACT => Ok(CommandType::Subtract),
             MULTIPLY => Ok(CommandType::Multiply),
             DIVIDE => Ok(CommandType::Divide),
+            MOD => Ok(CommandType::Mod),
             SELECT_RANDOM => Ok(CommandType::SelectRandom),
             RANDOM_RANGE => Ok(CommandType::RandomRange),
             CAPITALIZE => Ok(CommandType::Capitalize),
             UPPER => Ok(CommandType::Upper),
             LOWER => Ok(CommandType::Lower),
             REPEAT => Ok(CommandType::Repeat),
+            WHILE => Ok(CommandType::While),
             COPY => Ok(CommandType::Copy),
             PASTE => Ok(CommandType::Paste),
             PRINT => Ok(CommandType::Print),
@@ -212,6 +184,7 @@ pub enum ValueType {
     Int(i64),
     Float(f64),
     Bool(bool),
+    List(Vec<ValueType>),
     Identifier(String),
     Command(Command),
     None,
@@ -239,8 +212,11 @@ impl ValueType {
             ValueType::Int(_) => size_of::<ValueType>(),
             ValueType::Float(_) => size_of::<ValueType>(),
             ValueType::Bool(_) => size_of::<ValueType>(),
+            ValueType::List(values) => size_of::<ValueType>()
+                .saturating_add(values.iter().map(|value| value.get_size()).sum()),
             ValueType::Identifier(value) => size_of::<ValueType>() + value.capacity(),
-            ValueType::Command(_) => size_of::<ValueType>(),
+            ValueType::Command(value) => size_of::<ValueType>()
+                .saturating_add(value.args.iter().map(|value| value.get_size()).sum()),
             ValueType::None => size_of::<ValueType>(),
         }
     }
@@ -252,9 +228,16 @@ impl ToString for ValueType {
             ValueType::Text(value) => value.to_string(),
             ValueType::Int(value) => value.to_string(),
             ValueType::Float(value) => value.to_string(),
+            ValueType::Bool(value) => value.to_string(),
+            ValueType::List(values) => {
+                let list_string: String = values
+                    .iter()
+                    .map(|value| value.to_string() + ", ")
+                    .collect();
+                format!("[{}]", &list_string[0..list_string.len() - 1])
+            }
             ValueType::Identifier(value) => value.to_string(),
             ValueType::Command(value) => value.command_type.to_str().to_string(),
-            ValueType::Bool(value) => value.to_string(),
             ValueType::None => "".to_string(),
         }
     }
