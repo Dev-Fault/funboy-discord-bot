@@ -1,8 +1,8 @@
 use std::mem::size_of;
 use std::str::FromStr;
 
-use crate::interpreter::lexer::KEYWORD_FALSE;
-use crate::interpreter::lexer::KEYWORD_TRUE;
+use crate::fsl_interpreter::lexer::KEYWORD_FALSE;
+use crate::fsl_interpreter::lexer::KEYWORD_TRUE;
 
 use super::lexer::Token;
 use super::lexer::TokenType;
@@ -12,7 +12,6 @@ pub const TOKEN_VALUE_EXCEPT: &str = "Token must have value";
 pub const ERR_LOCATION_WIDTH: usize = 3;
 
 // General purpose
-pub const EQ: &str = "eq";
 pub const PRINT: &str = "print";
 
 // Numbers
@@ -21,8 +20,6 @@ pub const SUBTRACT: &str = "sub";
 pub const MULTIPLY: &str = "mul";
 pub const DIVIDE: &str = "div";
 pub const MOD: &str = "mod";
-pub const GT: &str = "gt";
-pub const LT: &str = "lt";
 pub const RANDOM_RANGE: &str = "random_range";
 
 // Variables
@@ -30,6 +27,9 @@ pub const COPY: &str = "copy";
 pub const PASTE: &str = "paste";
 
 // Booleans
+pub const EQ: &str = "eq";
+pub const GT: &str = "gt";
+pub const LT: &str = "lt";
 pub const NOT: &str = "not";
 pub const AND: &str = "and";
 pub const OR: &str = "or";
@@ -506,7 +506,7 @@ pub fn parse(tokens: Vec<Token>) -> Result<Vec<Command>, String> {
 #[cfg(test)]
 mod tests {
 
-    use crate::interpreter::{
+    use crate::fsl_interpreter::{
         lexer::tokenize,
         parser::{Command, CommandType, ValueType},
     };

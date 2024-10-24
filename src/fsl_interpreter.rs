@@ -93,6 +93,51 @@ impl Interpreter {
         }
     }
 
+    pub fn interpret_embedded_code(&mut self, input: &str) -> Result<String, String> {
+        let mut output = String::with_capacity(input.len());
+        let mut code_stack: Vec<String> = Vec::new();
+
+        let mut code_depth: i16 = 0;
+
+        for c in input.chars() {
+            if c == '{' {
+                code_stack.push(String::new());
+                code_depth += 1;
+            } else if c == '}' {
+                code_depth -= 1;
+                if code_depth < 0 {
+                    return Err("Unmatched curly braces".to_string());
+                } else {
+                    match code_stack.pop() {
+                        Some(code) => {
+                            match self.interpret(&code) {
+                                Ok(eval) => match code_stack.last_mut() {
+                                    Some(code) => code.push_str(&eval),
+                                    None => output.push_str(&eval),
+                                },
+                                Err(e) => return Err(e),
+                            };
+                        }
+                        None => {}
+                    }
+                }
+            } else if code_depth == 0 {
+                output.push(c);
+            } else {
+                match code_stack.last_mut() {
+                    Some(s) => s.push(c),
+                    None => {}
+                }
+            }
+        }
+
+        if code_depth != 0 {
+            return Err("Unmatched curly braces".to_string());
+        }
+
+        Ok(output)
+    }
+
     pub fn interpret(&mut self, code: &str) -> Result<String, String> {
         let commands = parse(tokenize(code))?;
 
@@ -337,7 +382,7 @@ impl Interpreter {
                                 return Ok(ValueType::Text(format!(
                                     "{}{}",
                                     text[0..1].to_uppercase(),
-                                    text[1..].to_lowercase()
+                                    text[1..].to_string()
                                 )));
                             } else {
                                 return Ok(ValueType::Text("".to_string()));
@@ -1051,7 +1096,30 @@ impl Interpreter {
 #[cfg(test)]
 mod tests {
 
-    use crate::interpreter::{parser::ValueType, Interpreter};
+    use crate::fsl_documentation::{self, get_command_documentation};
+    use crate::fsl_interpreter::{parser::ValueType, Interpreter};
+
+    #[test]
+    fn validate_documentation_examples() {
+        let mut interpreter = Interpreter::new();
+        let documentation = get_command_documentation();
+        for command in &documentation {
+            for example in &command.examples {
+                if let Some((code, expected_output)) = example.split_once("=") {
+                    let output = interpreter
+                        .interpret_embedded_code(code)
+                        .unwrap()
+                        .trim()
+                        .to_owned();
+                    let expected_output = expected_output.trim();
+                    if output != expected_output {
+                        eprintln!("code: {}\noutput: {}\n", code, output);
+                    }
+                    assert_eq!(output, expected_output);
+                }
+            }
+        }
+    }
 
     #[test]
     fn interpret_new_line() {

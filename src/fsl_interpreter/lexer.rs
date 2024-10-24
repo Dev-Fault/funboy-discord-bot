@@ -176,7 +176,7 @@ fn get_symbol<'a>(code: &str, symbols: &[&'a str]) -> Option<&'a str> {
 
 #[cfg(test)]
 mod tests {
-    use crate::interpreter::lexer::{tokenize, TokenType, OPENING_PARENTHESIS};
+    use crate::fsl_interpreter::lexer::{tokenize, TokenType, OPENING_PARENTHESIS};
 
     #[test]
     fn standard_tokens() {

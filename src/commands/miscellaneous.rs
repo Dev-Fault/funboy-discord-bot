@@ -1,5 +1,10 @@
-use crate::{io_utils::discord_message_format::extract_image_urls, Context, Error};
+use crate::{
+    fsl_documentation::get_command_documentation,
+    io_utils::{context_extension::ContextExtension, discord_message_format::extract_image_urls},
+    Context, Error,
+};
 
+use ::serenity::all::CreateEmbedFooter;
 use poise::{
     samples::HelpConfiguration,
     serenity_prelude::{self as serenity, ChannelId, CreateEmbed, CreateMessage},
@@ -20,6 +25,66 @@ pub async fn help(ctx: Context<'_>, command: Option<String>) -> Result<(), Error
         ..Default::default()
     };
     poise::builtins::help(ctx, command.as_deref(), config).await?;
+    Ok(())
+}
+
+/// Display help information for commands
+#[poise::command(slash_command, prefix_command)]
+pub async fn fsl_help(ctx: Context<'_>, command_name: Option<String>) -> Result<(), Error> {
+    match command_name {
+        Some(command_name) => {
+            if let Some(command) = get_command_documentation()
+                .iter()
+                .find(|info| info.name == command_name)
+            {
+                let mut examples = command
+                    .examples
+                    .iter()
+                    .map(|example| "**".to_string() + example + "**\n")
+                    .collect::<String>();
+
+                examples.pop();
+
+                let embed = CreateEmbed::new()
+                    .title(command.name.clone())
+                    .description(format!(
+                        "Description: {}\n\nExamples:\n{}",
+                        command.description, examples
+                    ));
+
+                ctx.send(CreateReply::default().embed(embed).ephemeral(true))
+                    .await?;
+            } else {
+                ctx.say_ephemeral(&format!("No command named **{}** was found.", command_name))
+                    .await?;
+            }
+        }
+        None => {
+            let title = "FSL - Funboy Scripting Language";
+            let description = "The FSL language is a simple scripting language that you can embed in text when using the /generate command to manipulate text.\n
+        When using the **/generate** command to indicate you are using FSL commands place any code inside of curly braces such as in this example: **{print(\"Hello, world!\")}**\n
+        The generate command will then interpret the code inside the curly braces and replace the curly braces and text within with the generated output.\n
+        As an example: **/generate Hello {print(\", world!\")}** will output: **Hello, World!**\n
+        The FSL language recognizes a few different types of data: Int (whole number), Float (decimal number), Text (indicated by surrounding data in quotes), Identifier (text that is not surrounded by quotes), and List which are an aggregate of any of the preceeding types and can be created using the Copy command.\n
+        To use the language familiarize yourself with the commands by typing **/help_fsl command_name** to get more information on a specific command.";
+
+            let mut list_of_commands: String = get_command_documentation()
+                .iter()
+                .map(|info| info.name.to_string() + ", ")
+                .collect::<String>();
+
+            list_of_commands.pop();
+            list_of_commands.pop();
+
+            let embed = CreateEmbed::new()
+                .title(title)
+                .description(format!("{}\n\nCommands: {}", description, list_of_commands));
+
+            ctx.send(CreateReply::default().embed(embed).ephemeral(true))
+                .await?;
+        }
+    }
+
     Ok(())
 }
 

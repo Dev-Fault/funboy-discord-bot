@@ -8,8 +8,9 @@ use storage::template_database::TemplateDatabase;
 use tokio::sync::Mutex;
 
 mod commands;
+mod fsl_documentation;
 #[allow(dead_code)]
-mod interpreter;
+mod fsl_interpreter;
 mod io_utils;
 mod storage;
 mod text_interpolator;
@@ -47,6 +48,7 @@ async fn main() {
                 commands::miscellaneous::register(),
                 commands::miscellaneous::move_bot_pins(),
                 commands::miscellaneous::age(),
+                commands::miscellaneous::fsl_help(),
                 commands::random::random_number(),
                 commands::random::random_word(),
                 commands::text_gen::add(),

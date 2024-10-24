@@ -174,7 +174,7 @@ mod tests {
         message.push(regular_string_3);
         message.push(regular_string_4);
 
-        for split in split_message(&message) {
+        for split in split_message(&message.iter().map(|s| &s[..]).collect::<Vec<&str>>()[..]) {
             assert!(split.len() <= super::DISCORD_CHARACTER_LIMIT);
         }
     }
