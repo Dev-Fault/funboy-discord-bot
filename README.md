@@ -14,8 +14,8 @@ The Funboy discord bot is designed primarly to generate semi-randomized text fro
 # Installation and Usage
 
 This bot is not publically hosted so in order to use it you must install and use cargo to build it from source and host it yourself with a valid discord token. Once you've installed cargo and gotten a discord token you can use the terminal to build the source code with **cargo build --release** and then run the bot by setting the discord token environment variable with **DISCORD_TOKEN=your_token_here** and then run the generated build file in **/target/release/funboy**
-<br>The bot optionally uses an IMGUR_CLIENT_ID variable for the **/search_image** command but everything else will still work without it.<br>
-<br>Once the bot is set up use /help to get a list of bot commands and descriptions of what each command does.<br>
+<br>The bot optionally uses an **IMGUR_CLIENT_ID** environment variable for the **/search_image** command but everything else will still work without it.<br>
+<br>Once the bot is set up use **/help** to get a list of bot commands and descriptions of what each command does.<br>
 
 # License
 
