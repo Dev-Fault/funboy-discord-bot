@@ -8,8 +8,8 @@
 
 The Funboy discord bot is designed primarly to generate semi-randomized text from a user created and modified database of templates and substitutes. A template is simply a label that maps to a list of substitutes that will be randomly selected from when generating text. When generating text templates are marked by starting with a valid template charater (', ^, or `) such as ^noun. This marcation lets the **/generate** command know which text should be substituted. As an example a user might create a template called "animal" and store substitutes such as "cat, dog, bat" and then use the generate command to produce randomized output by entering "My favorite animal is ^animal." which will randomly replace ^animal with any substitutes present in the template.
 <br>Example output: **My favorite animal is dog**<br>
-The bot also has it's own scripting language (FSL - Funboy Scripting Language) that the generate command can interpret. Use the /fsl_help command to learn how to use it. 
-<br>In addition, the bot is capable of playing music and sounds from the web by using the **/join_voice** command to enter a voice channel and **/play_track** to play a url or search for a track name and play it. Tracks can individually be manipulated by using **/show_tracks** to get a list of currently playing tracks and track controls.<br>
+<br>The bot also has it's own scripting language (FSL - Funboy Scripting Language) that the generate command can interpret. Use the /fsl_help command to learn how to use it.<br>
+<br>In addition, the bot is capable of playing music and sounds from the web by using the **/join_voice** command to enter a voice channel and **/play_track** to play a url or search for a track name and play it. Tracks can individually be manipulated by using **/show_tracks** to get a list of currently playing tracks and track controls.
 
 # Installation and Usage
 
