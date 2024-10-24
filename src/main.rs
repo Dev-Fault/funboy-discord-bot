@@ -25,7 +25,7 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 pub struct Data {
     pub template_db: Mutex<TemplateDatabase>,
     pub track_list: Arc<Mutex<TrackList>>,
-    pub imgur_client_id: Arc<String>,
+    pub imgur_client_id: Arc<Option<String>>,
 } // User data, which is stored and accessible in all command invocations
 
 struct HttpKey;
@@ -37,7 +37,13 @@ impl TypeMapKey for HttpKey {
 #[tokio::main]
 async fn main() {
     let token = std::env::var("DISCORD_TOKEN").expect("must have DISCORD_TOKEN");
-    let imgur_client_id = std::env::var("IMGUR_CLIENT_ID").expect("must have IMGUR_CLIENT_ID");
+    let imgur_client_id: Option<String> = match std::env::var("IMGUR_CLIENT_ID") {
+        Ok(id) => Some(id),
+        Err(_) => {
+            eprintln!("Failed to get IMGUR_CLIENT_ID");
+            None
+        }
+    };
 
     let intents = GatewayIntents::non_privileged();
 

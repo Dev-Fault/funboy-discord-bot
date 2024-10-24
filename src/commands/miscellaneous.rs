@@ -4,7 +4,6 @@ use crate::{
     Context, Error,
 };
 
-use ::serenity::all::CreateEmbedFooter;
 use poise::{
     samples::HelpConfiguration,
     serenity_prelude::{self as serenity, ChannelId, CreateEmbed, CreateMessage},

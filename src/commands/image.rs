@@ -1,3 +1,5 @@
+use std::borrow::Borrow;
+
 use crate::{commands::random, io_utils::context_extension::ContextExtension, Context, Error};
 use reqwest::header::{HeaderMap, AUTHORIZATION};
 use serde::Deserialize;
@@ -19,18 +21,23 @@ struct ImgurImage {
 /// Example usage: **/search_image**  query: cat
 #[poise::command(slash_command, prefix_command)]
 pub async fn search_image(ctx: Context<'_>, query: String) -> Result<(), Error> {
-    let images = imgur_gallery_search(&query, &ctx.data().imgur_client_id)
-        .await?
-        .data;
+    match ctx.data().imgur_client_id.borrow() {
+        Some(id) => {
+            let images = imgur_gallery_search(&query, id).await?.data;
 
-    if images.len() == 0 {
-        ctx.say_ephemeral(&format!("No images for query {} were found.", query))
-            .await?;
-    } else {
-        let i = random::get_random_exclusive(0, images.len());
-        ctx.say(&images[i].link).await?;
+            if images.len() == 0 {
+                ctx.say_ephemeral(&format!("No images for query {} were found.", query))
+                    .await?;
+            } else {
+                let i = random::get_random_exclusive(0, images.len());
+                ctx.say(&images[i].link).await?;
+            }
+        }
+        None => {
+            ctx.say_ephemeral("Error: Couldn't load the imgur API.")
+                .await?;
+        }
     }
-
     Ok(())
 }
 
