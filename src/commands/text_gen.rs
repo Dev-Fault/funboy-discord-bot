@@ -796,6 +796,9 @@ pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Res
 /// template name:
 /// **^verb^ing** which may be subsituted into **eating** if a substitute exists named **eat**
 ///
+/// You can also embed code to manipulate text using the FSL language. Type **/fsl_help** for more
+/// information.
+///
 /// Example usage: **/generate I love ^fruit^s**
 /// Example output: **I love apples!**
 #[poise::command(slash_command, prefix_command)]
