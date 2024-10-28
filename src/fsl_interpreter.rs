@@ -813,7 +813,7 @@ impl Interpreter {
                             ValueType::Command(command) => {
                                 match self.eval_command(command.clone())? {
                                     ValueType::Bool(value) => {
-                                        if value && loop_count != LOOP_LIMIT {
+                                        if value {
                                             for arg in &args[1..args.len()] {
                                                 if let ValueType::Command(command) = arg {
                                                     self.eval_command(command.clone())?;
@@ -839,6 +839,10 @@ impl Interpreter {
                         };
 
                         loop_count = loop_count.saturating_add(1);
+
+                        if loop_count >= LOOP_LIMIT {
+                            return Ok(ValueType::None);
+                        }
                     }
                 }
             }
