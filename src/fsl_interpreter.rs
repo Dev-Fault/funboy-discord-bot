@@ -841,7 +841,7 @@ impl Interpreter {
                         loop_count = loop_count.saturating_add(1);
 
                         if loop_count >= LOOP_LIMIT {
-                            return Ok(ValueType::None);
+                            return Err(command_type.gen_err("Loop limit exceeded"));
                         }
                     }
                 }
