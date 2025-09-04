@@ -11,6 +11,12 @@ The Funboy discord bot is designed primarly to generate semi-randomized text fro
 <br>The bot also has it's own scripting language (FSL - Funboy Scripting Language) that the generate command can interpret. Use the /fsl_help command to learn how to use it.<br>
 <br>In addition, the bot is capable of playing music and sounds from the web by using the **/join_voice** command to enter a voice channel and **/play_track** to play a url or search for a track name and play it. Tracks can be individually manipulated by using **/show_tracks** to get a list of currently playing tracks and track controls.
 
+# Build Dependencies
+sqlite3, cmake, rustup, openssl
+
+# Optional Dependencies
+yt-dlp
+
 # Installation and Usage
 
 This bot is not publically hosted so in order to use it you must install and use cargo to build it from source and host it yourself with a valid discord token. Once you've installed cargo and gotten a discord token you can use the terminal to build the source code with **cargo build --release** and then run the bot by setting the discord token environment variable with **DISCORD_TOKEN=your_token_here** and then run the generated build file in **/target/release/funboy**
