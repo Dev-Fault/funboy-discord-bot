@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use ::serenity::all::{ClientBuilder, FullEvent, GatewayIntents, Interaction};
 use io_utils::custom_components::{CustomComponent, TrackComponent};
+use ollama_generator::ollama_generator::OllamaGenerator;
 use reqwest::Client as HttpClient;
 use songbird::{typemap::TypeMapKey, SerenityInit};
 use storage::template_database::TemplateDatabase;
@@ -12,6 +13,7 @@ mod fsl_documentation;
 #[allow(dead_code)]
 mod fsl_interpreter;
 mod io_utils;
+mod ollama_generator;
 mod storage;
 mod text_interpolator;
 
@@ -24,6 +26,7 @@ pub type Context<'a> = poise::Context<'a, Data, Error>;
 
 pub struct Data {
     pub template_db: Mutex<TemplateDatabase>,
+    pub ollama_generator: Mutex<OllamaGenerator>,
     pub track_list: Arc<Mutex<TrackList>>,
     pub imgur_client_id: Arc<Option<String>>,
 } // User data, which is stored and accessible in all command invocations
@@ -78,6 +81,8 @@ async fn main() {
                 commands::sound::stop_tracks(),
                 commands::sound::show_tracks(),
                 commands::image::search_image(),
+                commands::ollama::list_ollama_model(),
+                commands::ollama::ai_prompt(),
             ],
             event_handler: |ctx, event, _framework_ctx, data| {
                 Box::pin(async move {
@@ -111,6 +116,7 @@ async fn main() {
                         TemplateDatabase::from_path(FUNBOY_DB_PATH)
                             .expect("Failed to load funboy database."),
                     ),
+                    ollama_generator: Mutex::new(OllamaGenerator::new()),
                     track_list: Mutex::new(TrackList::new()).into(),
                     imgur_client_id: Arc::new(imgur_client_id),
                 })
