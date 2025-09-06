@@ -81,8 +81,16 @@ async fn main() {
                 commands::sound::stop_tracks(),
                 commands::sound::show_tracks(),
                 commands::image::search_image(),
-                commands::ollama::list_ollama_model(),
-                commands::ollama::ai_prompt(),
+                commands::ollama::show_ollama_models(),
+                commands::ollama::set_ollama_model(),
+                commands::ollama::show_ollama_config(),
+                commands::ollama::set_ollama_word_limit(),
+                commands::ollama::set_ollama_parameters(),
+                commands::ollama::set_ollama_system_prompt(),
+                commands::ollama::reset_ollama_system_prompt(),
+                commands::ollama::set_ollama_template(),
+                commands::ollama::reset_ollama_template(),
+                commands::ollama::generate_ollama(),
             ],
             event_handler: |ctx, event, _framework_ctx, data| {
                 Box::pin(async move {
