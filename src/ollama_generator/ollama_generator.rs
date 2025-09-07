@@ -70,7 +70,7 @@ impl ToString for OllamaConfig {
 
 pub struct OllamaGenerator {
     ollama: Ollama,
-    selected_model: Option<String>,
+    current_model: Option<String>,
     config: OllamaConfig,
 }
 
@@ -78,7 +78,7 @@ impl OllamaGenerator {
     pub fn new() -> Self {
         Self {
             ollama: Ollama::default(),
-            selected_model: None,
+            current_model: None,
             config: OllamaConfig::new(),
         }
     }
@@ -89,7 +89,7 @@ impl OllamaGenerator {
 
     pub async fn get_model_info(&self) -> Result<ModelInfo, OllamaError> {
         self.ollama
-            .show_model_info(self.selected_model.clone().unwrap_or("".to_string()))
+            .show_model_info(self.current_model.clone().unwrap_or("".to_string()))
             .await
     }
 
@@ -97,8 +97,21 @@ impl OllamaGenerator {
         &self.config
     }
 
-    pub fn set_selected_model(&mut self, model: &str) {
-        self.selected_model = Some(model.to_string());
+    pub async fn get_current_model(&self) -> Option<String> {
+        match &self.current_model {
+            Some(name) => Some(name.to_string()),
+            None => {
+                let available_models = self.get_models().await;
+                match available_models {
+                    Ok(models) => Some(models[0].name.clone()),
+                    Err(_) => None,
+                }
+            }
+        }
+    }
+
+    pub fn set_current_model(&mut self, model: &str) {
+        self.current_model = Some(model.to_string());
     }
 
     pub fn set_system_prompt(&mut self, prompt: &str) {
@@ -169,24 +182,29 @@ impl OllamaGenerator {
     pub async fn generate(
         &self,
         prompt: &str,
-        temperature: Option<f32>,
+        temperature_override: Option<f32>,
+        model_override: Option<String>,
     ) -> Result<GenerationResponse, OllamaError> {
         let mut override_options = self.generate_options();
-        if let Some(t) = temperature {
+        if let Some(t) = temperature_override {
             override_options = override_options.temperature(t);
         }
-        let model = match &self.selected_model {
-            Some(name) => name.to_string(),
-            None => {
-                let available_models = self.get_models().await;
-                match available_models {
-                    Ok(models) => models[0].name.clone(),
-                    Err(e) => {
-                        return Err(e);
+        let model = match model_override {
+            Some(model) => model,
+            None => match &self.current_model {
+                Some(name) => name.to_string(),
+                None => {
+                    let available_models = self.get_models().await;
+                    match available_models {
+                        Ok(models) => models[0].name.clone(),
+                        Err(e) => {
+                            return Err(e);
+                        }
                     }
                 }
-            }
+            },
         };
+
         let mut request = GenerationRequest::new(model, prompt).options(override_options);
         request = request.system(self.config.system_prompt.clone());
         request = request.template(self.config.template.clone());

@@ -83,7 +83,7 @@ async fn main() {
                 commands::image::search_image(),
                 commands::ollama::show_ollama_models(),
                 commands::ollama::set_ollama_model(),
-                commands::ollama::show_ollama_config(),
+                commands::ollama::show_ollama_settings(),
                 commands::ollama::set_ollama_word_limit(),
                 commands::ollama::set_ollama_parameters(),
                 commands::ollama::set_ollama_system_prompt(),

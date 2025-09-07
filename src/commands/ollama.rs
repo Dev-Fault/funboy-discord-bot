@@ -38,10 +38,18 @@ pub async fn show_ollama_models(ctx: Context<'_>) -> Result<(), Error> {
 
 /// Show ollama config
 #[poise::command(slash_command, prefix_command)]
-pub async fn show_ollama_config(ctx: Context<'_>) -> Result<(), Error> {
+pub async fn show_ollama_settings(ctx: Context<'_>) -> Result<(), Error> {
     let ollama_generator = ctx.data().ollama_generator.lock().await;
-    ctx.say_ephemeral(&ollama_generator.get_config().to_string())
-        .await?;
+    let current_model = match ollama_generator.get_current_model().await {
+        Some(name) => name,
+        None => "None".to_string(),
+    };
+    ctx.say_ephemeral(&format!(
+        "Current Model: {}\n{}",
+        current_model,
+        &ollama_generator.get_config().to_string()
+    ))
+    .await?;
 
     Ok(())
 }
@@ -61,7 +69,7 @@ pub async fn set_ollama_model(ctx: Context<'_>, model: String) -> Result<(), Err
                 .map(|model| &model.name)
                 .any(|name| *name == model)
             {
-                ollama_generator.set_selected_model(&model);
+                ollama_generator.set_current_model(&model);
                 ctx.say_ephemeral(&format!("Set ollama model to: \"{}\"", model))
                     .await?;
             } else {
@@ -171,7 +179,8 @@ pub async fn set_ollama_word_limit(ctx: Context<'_>, limit: u16) -> Result<(), E
 pub async fn generate_ollama(
     ctx: Context<'_>,
     prompt: String,
-    temperature: Option<f32>,
+    temperature_override: Option<f32>,
+    model_override: Option<String>,
 ) -> Result<(), Error> {
     let db = ctx.data().template_db.lock().await;
     let mut interpolator = TextInterpolator::default();
@@ -197,10 +206,12 @@ pub async fn generate_ollama(
             ctx.defer().await?;
 
             let ollama_generator = ctx.data().ollama_generator.lock().await;
-            let response = ollama_generator.generate(&prompt, temperature).await;
+            let response = ollama_generator
+                .generate(&prompt, temperature_override, model_override)
+                .await;
             match response {
-                Err(_) => {
-                    ctx.say_ephemeral(ERROR_OLLAMA_UNAVAILABLE).await?;
+                Err(e) => {
+                    ctx.say_ephemeral(&format!("Error: {}", e)).await?;
                 }
                 Ok(gen_res) => {
                     ctx.say_long(&format!("{}{}", &prompt, gen_res.response), false)
