@@ -5,6 +5,7 @@ use crate::io_utils::custom_components::{
     create_confirmation_interaction, CANCEL_BUTTON_ID, CONFIRM_BUTTON_ID,
 };
 use crate::io_utils::discord_message_format;
+use crate::io_utils::input_interp::interp_input;
 use crate::text_interpolator::TextInterpolator;
 use crate::{
     fsl_interpreter::Interpreter,
@@ -804,26 +805,18 @@ pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Res
 #[poise::command(slash_command, prefix_command)]
 pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
     let db = ctx.data().template_db.lock().await;
-    let mut interpolator = TextInterpolator::default();
 
-    let output = interpolator.interp(&text, &|template| match db.get_random_subs(template) {
+    let interpreted_prompt = interp_input(&text, &|template| match db.get_random_subs(template) {
         Ok(sub) => Some(sub),
         Err(_) => None,
     });
 
-    let mut fsl_interpreter = Interpreter::new();
-
-    match output {
-        Ok(output) => {
-            match fsl_interpreter.interpret_embedded_code(&output) {
-                Ok(o) => ctx.say_long(&o, false).await?,
-                Err(e) => ctx.say_ephemeral(&format!("Error: {}.", &e)[..]).await?,
-            };
+    match interpreted_prompt {
+        Ok(output) => ctx.say_long(&output, false).await?,
+        Err(e) => {
+            ctx.say_ephemeral(&format!("Error: {}", &e)).await?;
         }
-        Err(_) => {
-            ctx.say(ERROR_GENERATION_FAILED).await?;
-        }
-    }
+    };
 
     Ok(())
 }

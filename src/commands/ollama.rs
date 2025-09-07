@@ -1,14 +1,6 @@
-use ollama_rs::models;
-use poise::CreateReply;
-
 use crate::{
-    fsl_interpreter::Interpreter,
-    io_utils::context_extension::ContextExtension,
-    ollama_generator::{
-        self,
-        ollama_generator::{OllamaParameters, MAX_PREDICT},
-    },
-    text_interpolator::TextInterpolator,
+    io_utils::{context_extension::ContextExtension, input_interp::interp_input},
+    ollama_generator::ollama_generator::MAX_PREDICT,
     Context, Error,
 };
 
@@ -183,23 +175,11 @@ pub async fn generate_ollama(
     model_override: Option<String>,
 ) -> Result<(), Error> {
     let db = ctx.data().template_db.lock().await;
-    let mut interpolator = TextInterpolator::default();
-
-    let output = interpolator.interp(&prompt, &|template| match db.get_random_subs(template) {
-        Ok(sub) => Some(sub),
-        Err(_) => None,
-    });
-
-    let mut fsl_interpreter = Interpreter::new();
-
-    let interpreted_prompt: Result<String, String> = match output {
-        Ok(output) => match fsl_interpreter.interpret_embedded_code(&output) {
-            Ok(o) => Ok(o),
-            Err(e) => Err(e),
-        },
-        Err(e) => Err(e.to_string()),
-    };
-
+    let interpreted_prompt =
+        interp_input(&prompt, &|template| match db.get_random_subs(template) {
+            Ok(sub) => Some(sub),
+            Err(_) => None,
+        });
     match interpreted_prompt {
         Ok(prompt) => {
             ctx.say("Generating response...").await?;
