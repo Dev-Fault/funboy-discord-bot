@@ -24,6 +24,8 @@ use uuid::Uuid;
 
 use crate::{Context, Error, HttpKey};
 
+const TRACK_LIMIT: usize = 10;
+
 const NOT_INITIALIZED: &str = "Songbird Voice client placed in at initialisation.";
 const NOT_IN_VOICE_CHANNEL: &str = "Not in a voice channel.";
 const JOINED_CHANNEL_NOTIF: &str = "Joined voice channel.";
@@ -91,6 +93,10 @@ impl TrackList {
 
     pub fn get_tracks(&mut self) -> Arc<[&mut Track]> {
         self.track_map.values_mut().collect()
+    }
+
+    pub fn get_track_count(&self) -> usize {
+        self.track_map.values().len()
     }
 
     pub fn get_track(&mut self, id: &str) -> Option<&mut Track> {
@@ -221,6 +227,22 @@ pub async fn leave_voice(ctx: Context<'_>) -> Result<(), Error> {
 /// Example usage: **/play_track** url_or_query: **Back In Black**
 #[poise::command(slash_command, prefix_command)]
 pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Error> {
+    let lock = match ctx.data().track_player_lock.try_lock() {
+        Ok(gaurd) => gaurd,
+        Err(_) => {
+            ctx.say_ephemeral("Busy queuing track. Please wait.")
+                .await?;
+            return Ok(());
+        }
+    };
+
+    let track_count = ctx.data().track_list.lock().await.get_track_count();
+    if track_count >= TRACK_LIMIT {
+        ctx.say_ephemeral(&format!("Max track limit of {} reached.", TRACK_LIMIT))
+            .await?;
+        return Ok(());
+    }
+
     let is_url = !url_or_query.starts_with("http");
 
     let http_client = get_http_client(ctx).await;
@@ -228,8 +250,8 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
     let manager = get_songbird_manager(ctx).await;
 
     if let Some(handler_lock) = manager.get(ctx.guild_id().unwrap()) {
+        ctx.say_ephemeral("Queuing track...").await?;
         ctx.defer().await?;
-
         let mut handler = handler_lock.lock().await;
 
         let mut src = if is_url {
@@ -270,6 +292,8 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
     } else {
         ctx.say(NOT_IN_VOICE_CHANNEL).await?;
     }
+
+    drop(lock);
 
     Ok(())
 }

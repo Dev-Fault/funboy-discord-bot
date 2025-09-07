@@ -5,7 +5,7 @@ use io_utils::custom_components::{CustomComponent, TrackComponent};
 use ollama_generator::ollama_generator::OllamaGenerator;
 use reqwest::Client as HttpClient;
 use songbird::{typemap::TypeMapKey, SerenityInit};
-use storage::template_database::{self, TemplateDatabase};
+use storage::template_database::TemplateDatabase;
 use tokio::sync::Mutex;
 
 mod commands;
@@ -29,6 +29,7 @@ pub struct Data {
     pub ollama_generator: Mutex<OllamaGenerator>,
     pub track_list: Arc<Mutex<TrackList>>,
     pub imgur_client_id: Arc<Option<String>>,
+    pub track_player_lock: Arc<Mutex<()>>,
 } // User data, which is stored and accessible in all command invocations
 
 struct HttpKey;
@@ -133,6 +134,7 @@ async fn main() {
                     ollama_generator: Mutex::new(OllamaGenerator::new()),
                     track_list: Mutex::new(TrackList::new()).into(),
                     imgur_client_id: Arc::new(imgur_client_id),
+                    track_player_lock: Arc::new(Mutex::new(())),
                 })
             })
         })
