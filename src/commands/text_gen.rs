@@ -38,9 +38,13 @@ const REMOVE_TEMPLATE_WARNING: &str =
 /// **Tip:** Add a single word substitutes by seperating them with spaces: **cat dog car house**
 /// **Tip:** a multi-word substitute by surround it in quotes: **"Big brown dog"**
 ///
-/// Example usage: **/add** template: **fruit** substitutes: **apple banana orange "dragon fruit" "key lime"**
+/// Example usage: **/add_subs** template: **fruit** substitutes: **apple banana orange "dragon fruit" "key lime"**
 #[poise::command(slash_command, prefix_command)]
-pub async fn add(ctx: Context<'_>, template: String, substitutes: String) -> Result<(), Error> {
+pub async fn add_subs(
+    ctx: Context<'_>,
+    template: String,
+    substitutes: String,
+) -> Result<(), Error> {
     if template.len() > INPUT_BYTE_LIMIT {
         ctx.say_ephemeral(ERROR_TEMPLATE_TOO_LARGE).await?;
         return Ok(());
