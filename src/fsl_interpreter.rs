@@ -5,7 +5,7 @@ use parser::{parse, Command, CommandType, ValueType};
 use rand::{self, Rng};
 use std::collections::HashMap;
 
-use crate::{io_utils::context_extension::MESSAGE_BYTE_LIMIT, FUNBOY_DB_PATH};
+use crate::{io_utils::context_extension::MESSAGE_BYTE_LIMIT, DEFAULT_TEMPLATE_DB_PATH};
 
 #[allow(dead_code)]
 mod lexer;
@@ -87,7 +87,7 @@ impl Interpreter {
             vars: VarMap::new(),
             output: String::new(),
             log: Vec::new(),
-            db: TemplateDatabase::from_path(FUNBOY_DB_PATH)
+            db: TemplateDatabase::from_path(DEFAULT_TEMPLATE_DB_PATH)
                 .expect("Funboy database failed to load."),
             interpolator: TextInterpolator::default(),
         }

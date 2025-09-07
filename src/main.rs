@@ -5,7 +5,7 @@ use io_utils::custom_components::{CustomComponent, TrackComponent};
 use ollama_generator::ollama_generator::OllamaGenerator;
 use reqwest::Client as HttpClient;
 use songbird::{typemap::TypeMapKey, SerenityInit};
-use storage::template_database::TemplateDatabase;
+use storage::template_database::{self, TemplateDatabase};
 use tokio::sync::Mutex;
 
 mod commands;
@@ -19,7 +19,7 @@ mod text_interpolator;
 
 use commands::sound::TrackList;
 
-pub const FUNBOY_DB_PATH: &str = "funboy.db";
+pub const DEFAULT_TEMPLATE_DB_PATH: &str = "funboy.db";
 
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
@@ -40,10 +40,14 @@ impl TypeMapKey for HttpKey {
 #[tokio::main]
 async fn main() {
     let token = std::env::var("DISCORD_TOKEN").expect("must have DISCORD_TOKEN");
+    let template_db_path: Option<String> = match std::env::var("TEMPLATE_DB_PATH") {
+        Ok(path) => Some(path),
+        Err(_) => None,
+    };
     let imgur_client_id: Option<String> = match std::env::var("IMGUR_CLIENT_ID") {
         Ok(id) => Some(id),
         Err(_) => {
-            eprintln!("Failed to get IMGUR_CLIENT_ID");
+            eprintln!("IMGUR_CLIENT_ID Not specified.");
             None
         }
     };
@@ -120,10 +124,12 @@ async fn main() {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
 
                 Ok(Data {
-                    template_db: Mutex::new(
-                        TemplateDatabase::from_path(FUNBOY_DB_PATH)
-                            .expect("Failed to load funboy database."),
-                    ),
+                    template_db: Mutex::new(match template_db_path {
+                        Some(path) => TemplateDatabase::from_path(&path)
+                            .expect("Failed to load template database."),
+                        None => TemplateDatabase::from_path(DEFAULT_TEMPLATE_DB_PATH)
+                            .expect("Failed to load template database."),
+                    }),
                     ollama_generator: Mutex::new(OllamaGenerator::new()),
                     track_list: Mutex::new(TrackList::new()).into(),
                     imgur_client_id: Arc::new(imgur_client_id),
