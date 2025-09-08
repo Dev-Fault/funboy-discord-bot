@@ -243,6 +243,13 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
         return Ok(());
     }
 
+    let yt_dlp_cookies_path = &ctx.data().yt_dlp_cookies_path;
+
+    let args = match yt_dlp_cookies_path {
+        Some(path) => vec![format!("cookies {}", path)],
+        None => vec![],
+    };
+
     let is_url = !url_or_query.starts_with("http");
 
     let http_client = get_http_client(ctx).await;
@@ -255,9 +262,9 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
         let mut handler = handler_lock.lock().await;
 
         let mut src = if is_url {
-            YoutubeDl::new_search(http_client, url_or_query.clone())
+            YoutubeDl::new_search(http_client, url_or_query.clone()).user_args(args)
         } else {
-            YoutubeDl::new(http_client, url_or_query.clone())
+            YoutubeDl::new(http_client, url_or_query.clone()).user_args(args)
         };
 
         let metadata = src.aux_metadata().await?;

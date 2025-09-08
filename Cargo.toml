@@ -19,7 +19,7 @@ features = ["cache", "builder", "client", "gateway", "model", "utils", "collecto
 version = "0.12.2"
 
 [dependencies.songbird]
-version = "0.4.3"
+version = "0.4.6"
 features = ["builtin-queue"]
 
 [dependencies.symphonia]
