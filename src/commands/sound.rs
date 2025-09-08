@@ -246,7 +246,7 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
     let yt_dlp_cookies_path = &ctx.data().yt_dlp_cookies_path;
 
     let args = match yt_dlp_cookies_path {
-        Some(path) => vec![format!("cookies {}", path)],
+        Some(path) => vec!["--cookies".to_string(), path.to_string()],
         None => vec![],
     };
 
