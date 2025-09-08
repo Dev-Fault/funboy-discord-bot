@@ -175,11 +175,13 @@ pub async fn generate_ollama(
     model_override: Option<String>,
 ) -> Result<(), Error> {
     let db = ctx.data().template_db.lock().await;
-    let interpreted_prompt =
-        interp_input(&prompt, &|template| match db.get_random_subs(template) {
-            Ok(sub) => Some(sub),
-            Err(_) => None,
-        });
+    let db_path = ctx.data().get_template_db_path();
+    let interpreted_prompt = interp_input(&prompt, db_path, &|template| match db
+        .get_random_subs(template)
+    {
+        Ok(sub) => Some(sub),
+        Err(_) => None,
+    });
     match interpreted_prompt {
         Ok(prompt) => {
             ctx.say("Generating response...").await?;

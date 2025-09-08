@@ -2,10 +2,11 @@ use crate::{fsl_interpreter::Interpreter, text_interpolator::TextInterpolator};
 
 pub fn interp_input(
     input: &str,
+    template_db_path: &str,
     substitutor: &impl Fn(&str) -> Option<String>,
 ) -> Result<String, String> {
     let mut interpolator = TextInterpolator::default();
-    let mut fsl_interpreter = Interpreter::new();
+    let mut fsl_interpreter = Interpreter::new(template_db_path);
 
     let output = interpolator.interp(input, substitutor);
 

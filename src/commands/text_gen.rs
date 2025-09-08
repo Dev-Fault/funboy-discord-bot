@@ -809,8 +809,11 @@ pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Res
 #[poise::command(slash_command, prefix_command)]
 pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
     let db = ctx.data().template_db.lock().await;
+    let db_path = ctx.data().get_template_db_path();
 
-    let interpreted_prompt = interp_input(&text, &|template| match db.get_random_subs(template) {
+    let interpreted_prompt = interp_input(&text, db_path, &|template| match db
+        .get_random_subs(template)
+    {
         Ok(sub) => Some(sub),
         Err(_) => None,
     });

@@ -82,12 +82,12 @@ pub struct Interpreter {
 }
 
 impl Interpreter {
-    pub fn new() -> Self {
+    pub fn new(template_db_path: &str) -> Self {
         Self {
             vars: VarMap::new(),
             output: String::new(),
             log: Vec::new(),
-            db: TemplateDatabase::from_path(DEFAULT_TEMPLATE_DB_PATH)
+            db: TemplateDatabase::from_path(template_db_path)
                 .expect("Funboy database failed to load."),
             interpolator: TextInterpolator::default(),
         }

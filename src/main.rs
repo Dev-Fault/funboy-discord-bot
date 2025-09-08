@@ -30,7 +30,14 @@ pub struct Data {
     pub track_list: Arc<Mutex<TrackList>>,
     pub imgur_client_id: Arc<Option<String>>,
     pub track_player_lock: Arc<Mutex<()>>,
+    template_db_path: String,
 } // User data, which is stored and accessible in all command invocations
+
+impl Data {
+    pub fn get_template_db_path(&self) -> &str {
+        &self.template_db_path
+    }
+}
 
 struct HttpKey;
 
@@ -124,13 +131,19 @@ async fn main() {
             Box::pin(async move {
                 poise::builtins::register_globally(ctx, &framework.options().commands).await?;
 
+                let db_path = {
+                    match template_db_path {
+                        Some(path) => path,
+                        None => DEFAULT_TEMPLATE_DB_PATH.to_string(),
+                    }
+                };
+
                 Ok(Data {
-                    template_db: Mutex::new(match template_db_path {
-                        Some(path) => TemplateDatabase::from_path(&path)
+                    template_db: Mutex::new(
+                        TemplateDatabase::from_path(&db_path)
                             .expect("Failed to load template database."),
-                        None => TemplateDatabase::from_path(DEFAULT_TEMPLATE_DB_PATH)
-                            .expect("Failed to load template database."),
-                    }),
+                    ),
+                    template_db_path: db_path,
                     ollama_generator: Mutex::new(OllamaGenerator::new()),
                     track_list: Mutex::new(TrackList::new()).into(),
                     imgur_client_id: Arc::new(imgur_client_id),
