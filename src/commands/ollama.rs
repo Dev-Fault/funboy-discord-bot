@@ -182,6 +182,7 @@ pub async fn generate_ollama(
         Ok(sub) => Some(sub),
         Err(_) => None,
     });
+    drop(db);
     match interpreted_prompt {
         Ok(prompt) => {
             ctx.say("Generating response...").await?;

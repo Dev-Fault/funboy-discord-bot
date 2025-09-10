@@ -13,7 +13,7 @@ use poise::{
     CreateReply,
 };
 #[derive(PartialEq, Eq)]
-struct Command<'a> {
+struct CommandInfo<'a> {
     pub name: &'a String,
     pub description: &'a Option<String>,
 }
@@ -25,9 +25,9 @@ pub async fn help(ctx: Context<'_>, show_descriptions: Option<bool>) -> Result<(
 
     let empty = "Miscellaneous".to_string();
     let mut help_text = String::new();
-    let mut command_map = HashMap::<&str, Vec<Command>>::new();
+    let mut command_map = HashMap::<&str, Vec<CommandInfo>>::new();
     for command in commands {
-        let command_info = Command {
+        let command_info = CommandInfo {
             name: &command.name,
             description: &command.description,
         };
