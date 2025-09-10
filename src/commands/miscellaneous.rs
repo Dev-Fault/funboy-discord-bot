@@ -1,34 +1,69 @@
+use std::collections::HashMap;
+
 use crate::{
     fsl_documentation::get_command_documentation,
     io_utils::{context_extension::ContextExtension, discord_message_format::extract_image_urls},
     Context, Error,
 };
 
+use ollama_rs::IntoUrlSealed;
 use poise::{
     samples::HelpConfiguration,
     serenity_prelude::{self as serenity, ChannelId, CreateEmbed, CreateMessage},
     CreateReply,
 };
+#[derive(PartialEq, Eq)]
+struct Command<'a> {
+    pub name: &'a String,
+    pub description: &'a Option<String>,
+}
 
-/// Display help information for commands
-#[poise::command(slash_command, prefix_command)]
-pub async fn help(ctx: Context<'_>, command: Option<String>) -> Result<(), Error> {
-    let bottom_text = "\
-    Type \"/help name_of_command\" for more info on a specific command.";
+/// List all available commands
+#[poise::command(slash_command, prefix_command, category = "Utility")]
+pub async fn help(ctx: Context<'_>, show_descriptions: Option<bool>) -> Result<(), Error> {
+    let commands = &ctx.framework().options().commands;
 
-    let config = HelpConfiguration {
-        show_subcommands: false,
-        show_context_menu_commands: false,
-        ephemeral: true,
-        extra_text_at_bottom: bottom_text,
-        ..Default::default()
-    };
-    poise::builtins::help(ctx, command.as_deref(), config).await?;
+    let empty = "Miscellaneous".to_string();
+    let mut help_text = String::new();
+    let mut command_map = HashMap::<&str, Vec<Command>>::new();
+    for command in commands {
+        let command_info = Command {
+            name: &command.name,
+            description: &command.description,
+        };
+        let category = command.category.as_ref().unwrap_or(&empty).as_str();
+        if !command.hide_in_help {
+            if !command_map.contains_key(category) {
+                command_map.insert(category, vec![]);
+            }
+            let commands = command_map.get_mut(category).unwrap();
+            if !commands.contains(&command_info) {
+                commands.push(command_info);
+            }
+        }
+    }
+
+    let mut keys: Vec<&&str> = command_map.keys().collect();
+    keys.sort();
+    for key in keys {
+        help_text.push_str(&format!("**{}**\n", key));
+        for value in command_map.get(key).unwrap() {
+            help_text.push_str(&format!("- /{}\n", value.name));
+            if show_descriptions.is_some_and(|show| show) {
+                if let Some(description) = value.description.as_ref() {
+                    help_text.push_str(&format!("\t- {}\n", description))
+                };
+            }
+        }
+    }
+
+    ctx.say_long(&help_text, true).await?;
+
     Ok(())
 }
 
 /// Display help information for commands
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Utility")]
 pub async fn fsl_help(ctx: Context<'_>, command_name: Option<String>) -> Result<(), Error> {
     match command_name {
         Some(command_name) => {
@@ -87,7 +122,7 @@ pub async fn fsl_help(ctx: Context<'_>, command_name: Option<String>) -> Result<
     Ok(())
 }
 
-#[poise::command(prefix_command)]
+#[poise::command(prefix_command, hide_in_help = true)]
 pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
     poise::builtins::register_application_commands_buttons(ctx).await?;
     Ok(())
@@ -96,13 +131,13 @@ pub async fn register(ctx: Context<'_>) -> Result<(), Error> {
 /// Move pinned messages posted by the bot to a selected channel
 ///
 /// Example usage: **/move_bot_pins** to_channel: **my-channel**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Utility")]
 pub async fn move_bot_pins(ctx: Context<'_>, to_channel: String) -> Result<(), Error> {
     if let Some(to_id) = get_channel_id(ctx, &to_channel).await? {
         let pins = ctx.channel_id().pins(ctx.http()).await?;
         for pin in pins {
             let bot_user = ctx.http().get_current_user().await?;
-            if &pin.author.name == &bot_user.name {
+            if pin.author.name == bot_user.name {
                 let mut embed = CreateEmbed::new()
                     .title(&pin.author.name)
                     .description(&pin.content)
@@ -161,14 +196,14 @@ async fn get_channel_id(ctx: Context<'_>, channel_name: &str) -> Result<Option<C
                     return Ok(Some(*channel_id));
                 }
             }
-            return Ok(None);
+            Ok(None)
         }
         None => Ok(None),
     }
 }
 
 /// Display the age of a users account.
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Utility")]
 pub async fn age(
     ctx: Context<'_>,
     #[description = "Selected user"] user: Option<serenity::User>,

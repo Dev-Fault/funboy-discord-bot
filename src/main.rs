@@ -41,7 +41,7 @@ impl Data {
 
     pub fn get_yt_dlp_cookies_path(&self) -> Option<&str> {
         match &self.yt_dlp_cookies_path {
-            Some(path) => Some(&path),
+            Some(path) => Some(path),
             None => None,
         }
     }

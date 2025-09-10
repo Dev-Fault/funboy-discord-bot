@@ -7,7 +7,7 @@ use crate::{
 const ERROR_OLLAMA_UNAVAILABLE: &str = "Error: Ollama service not available.";
 
 /// Show all available ollama models
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn show_ollama_models(ctx: Context<'_>) -> Result<(), Error> {
     let ollama_generator = ctx.data().ollama_generator.lock().await;
     let models = ollama_generator.get_models().await;
@@ -29,7 +29,7 @@ pub async fn show_ollama_models(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Show ollama config
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn show_ollama_settings(ctx: Context<'_>) -> Result<(), Error> {
     let ollama_generator = ctx.data().ollama_generator.lock().await;
     let current_model = match ollama_generator.get_current_model().await {
@@ -47,7 +47,7 @@ pub async fn show_ollama_settings(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Set the current ollama model
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn set_ollama_model(ctx: Context<'_>, model: String) -> Result<(), Error> {
     let mut ollama_generator = ctx.data().ollama_generator.lock().await;
     let models = ollama_generator.get_models().await;
@@ -77,7 +77,7 @@ pub async fn set_ollama_model(ctx: Context<'_>, model: String) -> Result<(), Err
 }
 
 /// Set ollama model parameters
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn set_ollama_parameters(
     ctx: Context<'_>,
     temperature: Option<f32>,
@@ -103,7 +103,7 @@ pub async fn set_ollama_parameters(
 }
 
 /// Reset ollama model parameters to default
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn reset_ollama_parameters(ctx: Context<'_>) -> Result<(), Error> {
     let mut ollama_generator = ctx.data().ollama_generator.lock().await;
     ollama_generator.reset_parameters();
@@ -112,7 +112,7 @@ pub async fn reset_ollama_parameters(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Set the system prompt for ollama
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn set_ollama_system_prompt(
     ctx: Context<'_>,
     system_prompt: String,
@@ -124,7 +124,7 @@ pub async fn set_ollama_system_prompt(
 }
 
 /// Reset the system prompt for ollama to default
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn reset_ollama_system_prompt(ctx: Context<'_>) -> Result<(), Error> {
     let mut ollama_generator = ctx.data().ollama_generator.lock().await;
     ollama_generator.reset_system_prompt();
@@ -133,7 +133,7 @@ pub async fn reset_ollama_system_prompt(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Set the template for ollama
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn set_ollama_template(ctx: Context<'_>, template: String) -> Result<(), Error> {
     let mut ollama_generator = ctx.data().ollama_generator.lock().await;
     ollama_generator.set_template(&template);
@@ -142,7 +142,7 @@ pub async fn set_ollama_template(ctx: Context<'_>, template: String) -> Result<(
 }
 
 /// Reset the template for ollama to default
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn reset_ollama_template(ctx: Context<'_>) -> Result<(), Error> {
     let mut ollama_generator = ctx.data().ollama_generator.lock().await;
     ollama_generator.reset_template();
@@ -151,7 +151,7 @@ pub async fn reset_ollama_template(ctx: Context<'_>) -> Result<(), Error> {
 }
 
 /// Set the maximum amount of words ollama can generate per prompt
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn set_ollama_word_limit(ctx: Context<'_>, limit: u16) -> Result<(), Error> {
     let mut ollama_generator = ctx.data().ollama_generator.lock().await;
     if ollama_generator.set_output_limit(limit) {
@@ -167,7 +167,7 @@ pub async fn set_ollama_word_limit(ctx: Context<'_>, limit: u16) -> Result<(), E
 }
 
 /// Generate an ollama response from prompt
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn generate_ollama(
     ctx: Context<'_>,
     prompt: String,

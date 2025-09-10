@@ -32,7 +32,7 @@ impl<'a> ContextExtension for Context<'a> {
     ) -> Result<(), Error> {
         let mut size: usize = 0;
 
-        for string in &message[..] {
+        for string in message {
             size = size.saturating_add(string.len());
         }
 
@@ -70,7 +70,7 @@ impl<'a> ContextExtension for Context<'a> {
     }
 
     async fn say_ephemeral(&self, message: &str) -> Result<(), Error> {
-        if message.len() == 0 {
+        if message.is_empty() {
             self.send(
                 CreateReply::default()
                     .content(WARN_EMPTY_MESSAGE)
@@ -90,7 +90,7 @@ impl<'a> ContextExtension for Context<'a> {
         if !ephemeral && message.len() > MESSAGE_BYTE_LIMIT {
             self.say_ephemeral(WARN_MESSAGE_SIZE_EXCEEDED).await?;
             return Ok(());
-        } else if message.len() == 0 {
+        } else if message.is_empty() {
             self.say_ephemeral(WARN_EMPTY_MESSAGE).await?;
             return Ok(());
         }

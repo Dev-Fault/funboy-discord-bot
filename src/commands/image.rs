@@ -19,7 +19,7 @@ struct ImgurImage {
 /// Search for and display an image based on a query.
 ///
 /// Example usage: **/search_image**  query: cat
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Image")]
 pub async fn search_image(ctx: Context<'_>, query: String) -> Result<(), Error> {
     match ctx.data().imgur_client_id.borrow() {
         Some(id) => {

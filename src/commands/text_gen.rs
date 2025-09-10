@@ -39,7 +39,7 @@ const REMOVE_TEMPLATE_WARNING: &str =
 /// **Tip:** a multi-word substitute by surround it in quotes: **"Big brown dog"**
 ///
 /// Example usage: **/add_subs** template: **fruit** substitutes: **apple banana orange "dragon fruit" "key lime"**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn add_subs(
     ctx: Context<'_>,
     template: String,
@@ -99,7 +99,7 @@ pub async fn add_subs(
 /// Add a single substitute to a template
 ///
 /// Example usage: **/add_sub** template: **quote** substitute: **Quoth the raven, "Nevermore."**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> Result<(), Error> {
     if template.contains(|c: char| !c.is_alphanumeric()) {
         ctx.say_ephemeral(ERROR_INVALID_TEMPLATE_NAME).await?;
@@ -147,7 +147,7 @@ pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> 
 /// Copy substitutes from one template into another one
 ///
 /// Example usage: **/copy_subs** from_template: **fruit** to_template: **produce**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn copy_subs(
     ctx: Context<'_>,
     from_template: String,
@@ -203,7 +203,7 @@ pub async fn copy_subs(
 /// this action cannot be undone!
 ///
 /// Example usage: **/remove_template** template: **fruit**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn remove_template(ctx: Context<'_>, template: String) -> Result<(), Error> {
     let mut db = ctx.data().template_db.lock().await;
 
@@ -271,7 +271,7 @@ pub async fn remove_template(ctx: Context<'_>, template: String) -> Result<(), E
 /// Remove a single substitute from a template
 ///
 /// Example usage: **/remove_sub** template: **fruit** substitute: **I love apples!**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn remove_sub(
     ctx: Context<'_>,
     template: String,
@@ -322,7 +322,7 @@ pub async fn remove_sub(
 /// **Tip:** To get the id of a substitute use the command /list_ids
 ///
 /// Example usage: **/remove_sub** template: **fruit** id: **1234**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn remove_sub_by_id(ctx: Context<'_>, template: String, id: usize) -> Result<(), Error> {
     let mut db = ctx.data().template_db.lock().await;
 
@@ -370,7 +370,7 @@ pub async fn remove_sub_by_id(ctx: Context<'_>, template: String, id: usize) -> 
 /// **Tip:** Remove a multi-word substitute by surround it in quotes: **"Big brown dog"**
 ///
 /// Example usage: **/remove_subs** template: **fruit** substitutes: **"dragon fruit" apple banana "I love apples!"**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn remove_subs(
     ctx: Context<'_>,
     template: String,
@@ -424,7 +424,7 @@ pub async fn remove_subs(
 /// **Tip:** Seperate each id by a space: 1234 4321
 ///
 /// Example usage: **/remove_subs_by_id** template: **noun** ids: 0 1 2 3 4
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn remove_subs_by_id(
     ctx: Context<'_>,
     template: String,
@@ -444,7 +444,7 @@ pub async fn remove_subs_by_id(
         })
         .collect();
 
-    if invalid_ids.len() > 0 {
+    if !invalid_ids.is_empty() {
         ctx.say_ephemeral(&format!("Ignoring invalid ids {:?}", invalid_ids))
             .await?;
     }
@@ -504,7 +504,7 @@ pub async fn remove_subs_by_id(
 /// Replace an old substitute with a new one
 ///
 /// Example usage: **/replace_sub** template: **fruit** old_sub: **apple** new_sub: **orange**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn replace_sub(
     ctx: Context<'_>,
     template: String,
@@ -561,7 +561,7 @@ pub async fn replace_sub(
 /// Replace an old substitute with it's id with a new one
 ///
 /// Example usage: **/replace_sub_by_id** template: **fruit** id: **1234** new_sub: **orange**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn replace_sub_by_id(
     ctx: Context<'_>,
     template: String,
@@ -621,7 +621,7 @@ pub async fn replace_sub_by_id(
 /// the refernce
 ///
 /// Example usage: **/rename_template** from: **fruit** to: **vegtable**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Result<(), Error> {
     if from.contains(|c: char| !c.is_alphanumeric()) || to.contains(|c: char| !c.is_alphanumeric())
     {
@@ -636,7 +636,7 @@ pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Resu
 
     match db.rename_template(&from, &to) {
         Err(e) => {
-            eprintln!("Error: {}", e.to_string());
+            eprintln!("Error: {}", e);
             ctx.say_ephemeral(&format!("Error: Failed to rename template. Make sure no preexisting templates exist named **{}**.", to))
                 .await?;
         }
@@ -673,38 +673,36 @@ async fn say_list(
                         &format!("No substitutes in template **\"**{}**\"**", tmp)[..],
                     )
                     .await?;
-                } else {
-                    if show_ids {
-                        let subs_with_ids: Vec<String> = subs
-                            .iter()
-                            .map(|record| {
-                                format!(
-                                    "**ID:** {}\n**Substitute:**\n{}\n\n",
-                                    record.id, record.name
-                                )
-                            })
-                            .collect();
+                } else if show_ids {
+                    let subs_with_ids: Vec<String> = subs
+                        .iter()
+                        .map(|record| {
+                            format!(
+                                "**ID:** {}\n**Substitute:**\n{}\n\n",
+                                record.id, record.name
+                            )
+                        })
+                        .collect();
 
-                        ctx.say_list(
-                            &subs_with_ids
-                                .iter()
-                                .map(|s| s.as_str())
-                                .collect::<Vec<&str>>()[..],
-                            true,
-                            None,
-                        )
-                        .await?;
-                    } else {
-                        ctx.say_list(
-                            &subs
-                                .iter()
-                                .map(|record| record.name.as_str())
-                                .collect::<Vec<&str>>()[..],
-                            true,
-                            Some(formatter),
-                        )
-                        .await?;
-                    }
+                    ctx.say_list(
+                        &subs_with_ids
+                            .iter()
+                            .map(|s| s.as_str())
+                            .collect::<Vec<&str>>()[..],
+                        true,
+                        None,
+                    )
+                    .await?;
+                } else {
+                    ctx.say_list(
+                        &subs
+                            .iter()
+                            .map(|record| record.name.as_str())
+                            .collect::<Vec<&str>>()[..],
+                        true,
+                        Some(formatter),
+                    )
+                    .await?;
                 }
             }
             Err(e) => {
@@ -744,7 +742,7 @@ async fn say_list(
 ///
 /// Example usage: **/list** template: **fruit**
 /// Example usage: **/list**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Error> {
     say_list(
         ctx,
@@ -759,7 +757,7 @@ pub async fn list(ctx: Context<'_>, template: Option<String>) -> Result<(), Erro
 /// List substitues in a template with their ids
 ///
 /// Example usage: **/list_ids** template: **noun**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn list_ids(ctx: Context<'_>, template: String) -> Result<(), Error> {
     say_list(
         ctx,
@@ -775,7 +773,7 @@ pub async fn list_ids(ctx: Context<'_>, template: String) -> Result<(), Error> {
 ///
 /// Example usage: **/list_numerically** template: **noun**
 /// Example usage: **/list_numerically**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Result<(), Error> {
     say_list(
         ctx,
@@ -806,7 +804,7 @@ pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Res
 ///
 /// Example usage: **/generate I love ^fruit^s**
 /// Example output: **I love apples!**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
     let db = ctx.data().template_db.lock().await;
     let db_path = ctx.data().get_template_db_path();

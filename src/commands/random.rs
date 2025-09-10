@@ -10,7 +10,7 @@ use crate::Error;
 /// Generate a random number between a minimum and maximum value.
 ///
 /// Example usage: **/random_number** min: **1** max: **6**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Random")]
 pub async fn random_number(ctx: Context<'_>, min: String, max: String) -> Result<(), Error> {
     if min.contains('.') || max.contains('.') {
         match get_random_result::<f64>(min, max) {
@@ -43,11 +43,11 @@ fn get_random_result<T: FromStr + PartialOrd + SampleUniform + ToString>(
 /// Use quotes for multi-word terms like: "apple tree"
 ///
 /// Example usage: **/random_word** words: **"apple tree" pear "orange tree" apricot**
-#[poise::command(slash_command, prefix_command)]
+#[poise::command(slash_command, prefix_command, category = "Random")]
 pub async fn random_word(ctx: Context<'_>, words: String) -> Result<(), Error> {
     let input = vectorize_input(&words);
     if input.len() < 2 {
-        ctx.say(format!("Error: enter at least two entries."))
+        ctx.say("Error: enter at least two entries.".to_string())
             .await?;
     } else {
         let output = input[get_random_inclusive(0, input.len() - 1)];

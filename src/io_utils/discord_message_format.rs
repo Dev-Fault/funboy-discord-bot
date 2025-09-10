@@ -4,12 +4,12 @@ pub const DISCORD_CHARACTER_LIMIT: usize = 2000;
 const IMAGE_TYPES: [&str; 3] = [".png", ".gif", ".jpg"];
 
 pub fn vectorize_input(input: &str) -> Vec<&str> {
-    let quote_filter = &QuoteFilter::from(&input);
+    let quote_filter = &QuoteFilter::from(input);
 
     let mut output: Vec<&str> = Vec::new();
 
     for quoted in &quote_filter.quoted {
-        output.push(&quoted);
+        output.push(quoted);
     }
 
     for unquoted in &quote_filter.unquoted {
@@ -24,10 +24,10 @@ pub fn vectorize_input(input: &str) -> Vec<&str> {
 pub fn split_message(message: &[&str]) -> Vec<String> {
     let mut message_split: Vec<String> = Vec::new();
 
-    let mut iter = message.iter();
+    let iter = message.iter();
     let mut message_part: String = String::default();
 
-    while let Some(value) = iter.next() {
+    for value in iter {
         if message_part.len() + value.len() <= DISCORD_CHARACTER_LIMIT {
             message_part.push_str(value);
         } else {
@@ -50,7 +50,7 @@ pub fn split_message(message: &[&str]) -> Vec<String> {
     message_split
 }
 
-pub fn split_long_string<'a>(s: &'a str) -> Vec<&'a str> {
+pub fn split_long_string(s: &str) -> Vec<&str> {
     let mut output = Vec::new();
     let blocks: usize = s.len() / DISCORD_CHARACTER_LIMIT;
 
@@ -92,7 +92,7 @@ pub fn format_as_numeric_list(output: &[&str]) -> Vec<String> {
         .collect()
 }
 
-pub fn extract_image_urls<'a>(input: &'a str) -> Vec<&'a str> {
+pub fn extract_image_urls(input: &str) -> Vec<&str> {
     let mut urls = Vec::new();
     for word in input.split_whitespace() {
         for image_type in IMAGE_TYPES {
