@@ -52,15 +52,26 @@ pub fn split_message(message: &[&str]) -> Vec<String> {
 
 pub fn split_long_string(s: &str) -> Vec<&str> {
     let mut output = Vec::new();
-    let blocks: usize = s.len() / DISCORD_CHARACTER_LIMIT;
 
-    for i in 0..blocks {
-        output.push(&s[i * DISCORD_CHARACTER_LIMIT..(i + 1) * DISCORD_CHARACTER_LIMIT]);
+    let mut output_length = 0;
+    let mut message_length = 0;
+
+    for word in s.split(' ').collect::<Vec<&str>>() {
+        if message_length + word.len() + 1 > DISCORD_CHARACTER_LIMIT {
+            output.push(
+                s.get(output_length..output_length + message_length)
+                    .unwrap_or_default(),
+            );
+            output_length += message_length;
+            message_length = 0;
+        }
+        message_length += word.len() + 1;
     }
 
-    if blocks * DISCORD_CHARACTER_LIMIT < s.len() {
-        output.push(&s[blocks * DISCORD_CHARACTER_LIMIT..s.len()]);
-    }
+    output.push(
+        s.get(output_length..output_length + message_length - 1)
+            .unwrap_or_default(),
+    );
 
     output
 }
@@ -86,8 +97,8 @@ pub fn format_as_numeric_list(output: &[&str]) -> Vec<String> {
         .iter()
         .map(|s| {
             let numbered = i.to_string() + ": " + s + "\n";
-            i = i + 1;
-            return numbered;
+            i += 1;
+            numbered
         })
         .collect()
 }

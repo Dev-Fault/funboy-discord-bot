@@ -95,7 +95,7 @@ impl<'a> ContextExtension for Context<'a> {
             return Ok(());
         }
 
-        for m in split_long_string(&message) {
+        for m in split_long_string(message) {
             self.send(CreateReply::default().content(m).ephemeral(ephemeral))
                 .await?;
         }
