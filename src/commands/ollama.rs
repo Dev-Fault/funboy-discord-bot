@@ -1,5 +1,8 @@
 use crate::{
-    io_utils::{context_extension::ContextExtension, input_interp::interp_input},
+    io_utils::{
+        context_extension::ContextExtension, discord_message_format::ellipsize_if_long,
+        input_interp::interp_input,
+    },
     ollama_generator::ollama_generator::MAX_PREDICT,
     Context, Error,
 };
@@ -174,6 +177,18 @@ pub async fn generate_ollama(
     temperature_override: Option<f32>,
     model_override: Option<String>,
 ) -> Result<(), Error> {
+    let user_id = ctx.author().id;
+    let mut users = ctx.data().ollama_users.lock().await;
+
+    if users.contains(&user_id) {
+        ctx.say_ephemeral("You are already generating a prompt. Please wait until it is finished.")
+            .await?;
+        return Ok(());
+    } else {
+        users.insert(user_id);
+    }
+    drop(users);
+
     let db = ctx.data().template_db.lock().await;
     let db_path = ctx.data().get_template_db_path();
     let interpreted_prompt = interp_input(&prompt, db_path, &|template| match db
@@ -183,29 +198,48 @@ pub async fn generate_ollama(
         Err(_) => None,
     });
     drop(db);
-    match interpreted_prompt {
-        Ok(prompt) => {
-            ctx.say("Generating response...").await?;
-            ctx.defer().await?;
 
-            let ollama_generator = ctx.data().ollama_generator.lock().await;
-            let response = ollama_generator
-                .generate(&prompt, temperature_override, model_override)
-                .await;
-            match response {
-                Err(e) => {
-                    ctx.say_ephemeral(&format!("Error: {}", e)).await?;
+    let result: Result<(), Error> = {
+        match interpreted_prompt {
+            Ok(prompt) => {
+                ctx.say(&format!(
+                    "Generating prompt: **\"{}\"**",
+                    ellipsize_if_long(&prompt, 200)
+                ))
+                .await?;
+                ctx.defer().await?;
+
+                let ollama_generator = ctx.data().ollama_generator.lock().await;
+                let response = ollama_generator
+                    .generate(&prompt, temperature_override, model_override)
+                    .await;
+                match response {
+                    Err(e) => {
+                        ctx.say_ephemeral(&format!("Error: {}", e)).await?;
+                    }
+                    Ok(gen_res) => {
+                        ctx.say_long(&format!("{}{}", &prompt, gen_res.response), false)
+                            .await?;
+                    }
                 }
-                Ok(gen_res) => {
-                    ctx.say_long(&format!("{}{}", &prompt, gen_res.response), false)
-                        .await?;
-                }
+                Ok(())
             }
-
-            Ok(())
+            Err(e) => {
+                ctx.say_ephemeral(&format!("Error: {}", &e)).await?;
+                Ok(())
+            }
         }
+    };
+
+    let mut users = ctx.data().ollama_users.lock().await;
+    users.remove(&user_id);
+
+    match result {
+        Ok(_) => Ok(()),
         Err(e) => {
-            ctx.say_ephemeral(&format!("Error: {}", &e)).await?;
+            eprintln!("{}", e);
+            ctx.say_ephemeral("Error: Ollama generation failed.")
+                .await?;
             Ok(())
         }
     }

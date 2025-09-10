@@ -76,6 +76,17 @@ pub fn split_long_string(s: &str) -> Vec<&str> {
     output
 }
 
+pub fn ellipsize_if_long(s: &str, limit: usize) -> String {
+    if limit > s.len() {
+        s.to_string()
+    } else {
+        match s.get(0..limit) {
+            Some(substr) => substr.to_owned() + "...",
+            None => String::new(),
+        }
+    }
+}
+
 pub fn format_as_standard_list(output: &[&str]) -> Vec<String> {
     output
         .iter()

@@ -1,9 +1,10 @@
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
 
 use ::serenity::all::{ClientBuilder, FullEvent, GatewayIntents, Interaction};
 use io_utils::custom_components::{CustomComponent, TrackComponent};
 use ollama_generator::ollama_generator::OllamaGenerator;
 use reqwest::Client as HttpClient;
+use serenity::all::UserId;
 use songbird::{typemap::TypeMapKey, SerenityInit};
 use storage::template_database::TemplateDatabase;
 use tokio::sync::Mutex;
@@ -30,6 +31,7 @@ pub struct Data {
     pub track_list: Arc<Mutex<TrackList>>,
     pub imgur_client_id: Arc<Option<String>>,
     pub track_player_lock: Arc<Mutex<()>>,
+    pub ollama_users: Mutex<HashSet<UserId>>,
     yt_dlp_cookies_path: Option<String>,
     template_db_path: String,
 } // User data, which is stored and accessible in all command invocations
@@ -154,6 +156,7 @@ async fn main() {
                     track_list: Mutex::new(TrackList::new()).into(),
                     imgur_client_id: Arc::new(imgur_client_id),
                     track_player_lock: Arc::new(Mutex::new(())),
+                    ollama_users: Mutex::new(HashSet::new()),
                 })
             })
         })
