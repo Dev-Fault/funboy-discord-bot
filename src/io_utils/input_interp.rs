@@ -1,17 +1,25 @@
-use crate::{fsl_interpreter::Interpreter, text_interpolator::TextInterpolator};
+use std::sync::Arc;
 
-pub fn interp_input(
-    input: &str,
-    template_db_path: &str,
-    substitutor: &impl Fn(&str) -> Option<String>,
-) -> Result<String, String> {
+use tokio::sync::Mutex;
+
+use crate::{
+    fsl_interpreter::Interpreter, storage::template_database::FunboyDatabase,
+    text_interpolator::TextInterpolator,
+};
+
+pub async fn interp_input(input: &str, db: Arc<Mutex<FunboyDatabase>>) -> Result<String, String> {
     let mut interpolator = TextInterpolator::default();
-    let mut fsl_interpreter = Interpreter::new(template_db_path);
 
-    let output = interpolator.interp(input, substitutor);
+    let fdb = db.lock().await;
+    let output = interpolator.interp(input, &|template| match fdb.get_random_subs(template) {
+        Ok(sub) => Some(sub),
+        Err(_) => None,
+    });
+    drop(fdb);
 
+    let mut fsl_interpreter = Interpreter::new_with_db(db);
     match output {
-        Ok(output) => match fsl_interpreter.interpret_embedded_code(&output) {
+        Ok(output) => match fsl_interpreter.interpret_embedded_code(&output).await {
             Ok(o) => Ok(o),
             Err(e) => Err(e),
         },

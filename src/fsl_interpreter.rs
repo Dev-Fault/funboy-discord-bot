@@ -1,9 +1,12 @@
 use crate::text_interpolator::{defaults::TEMPLATE_CARROT, TextInterpolator};
 use crate::FunboyDatabase;
+use async_recursion::async_recursion;
 use lexer::tokenize;
 use parser::{parse, Command, CommandType, ValueType};
 use rand::{self, Rng};
 use std::collections::HashMap;
+use std::sync::Arc;
+use tokio::sync::Mutex;
 
 use crate::io_utils::context_extension::MESSAGE_BYTE_LIMIT;
 
@@ -77,23 +80,32 @@ pub struct Interpreter {
     vars: VarMap,
     output: String,
     log: Vec<ValueType>,
-    db: FunboyDatabase,
+    db: Option<Arc<Mutex<FunboyDatabase>>>,
     interpolator: TextInterpolator,
 }
 
 impl Interpreter {
-    pub fn new(template_db_path: &str) -> Self {
+    pub fn new() -> Self {
         Self {
             vars: VarMap::new(),
             output: String::new(),
             log: Vec::new(),
-            db: FunboyDatabase::from_path(template_db_path)
-                .expect("Funboy database failed to load."),
             interpolator: TextInterpolator::default(),
+            db: None,
         }
     }
 
-    pub fn interpret_embedded_code(&mut self, input: &str) -> Result<String, String> {
+    pub fn new_with_db(db: Arc<Mutex<FunboyDatabase>>) -> Self {
+        Self {
+            vars: VarMap::new(),
+            output: String::new(),
+            log: Vec::new(),
+            interpolator: TextInterpolator::default(),
+            db: Some(db),
+        }
+    }
+
+    pub async fn interpret_embedded_code(&mut self, input: &str) -> Result<String, String> {
         let mut output = String::with_capacity(input.len());
         let mut code_stack: Vec<String> = Vec::new();
 
@@ -110,7 +122,7 @@ impl Interpreter {
                 } else {
                     match code_stack.pop() {
                         Some(code) => {
-                            match self.interpret(&code) {
+                            match self.interpret(&code).await {
                                 Ok(eval) => match code_stack.last_mut() {
                                     Some(code) => code.push_str(&eval),
                                     None => output.push_str(&eval),
@@ -138,28 +150,29 @@ impl Interpreter {
         Ok(output)
     }
 
-    pub fn interpret(&mut self, code: &str) -> Result<String, String> {
+    pub async fn interpret(&mut self, code: &str) -> Result<String, String> {
         let commands = parse(tokenize(code))?;
 
         for command in commands {
-            self.eval_command(command)?;
+            self.eval_command(command).await?;
         }
 
         Ok(self.output.drain(..).collect())
     }
 
-    pub fn interpret_and_log(&mut self, code: &str) -> Result<String, String> {
+    pub async fn interpret_and_log(&mut self, code: &str) -> Result<String, String> {
         let commands = parse(tokenize(code))?;
 
         for command in commands {
-            let value = self.eval_command(command)?;
+            let value = self.eval_command(command).await?;
             self.log.push(value);
         }
 
         Ok(self.output.drain(..).collect())
     }
 
-    fn eval_command(&mut self, command: Command) -> Result<ValueType, String> {
+    #[async_recursion]
+    async fn eval_command(&mut self, command: Command) -> Result<ValueType, String> {
         let mut args: Vec<ValueType> = Vec::new();
         let mut has_float_arg = false;
         let mut i = 0;
@@ -172,7 +185,7 @@ impl Interpreter {
                         CommandType::IfThenElse if i == 1 || i == 2 => args.push(arg),
                         CommandType::Repeat if i != 0 => args.push(arg),
                         CommandType::While => args.push(arg),
-                        _ => args.push(self.eval_command(sub_command.clone())?),
+                        _ => args.push(self.eval_command(sub_command.clone()).await?),
                     };
                 }
                 ValueType::Text(_) => args.push(arg),
@@ -427,7 +440,7 @@ impl Interpreter {
                             for _i in 0..*value {
                                 for arg in &args[1..args.len()] {
                                     if let ValueType::Command(command) = arg {
-                                        self.eval_command(command.clone())?;
+                                        self.eval_command(command.clone()).await?;
                                     } else {
                                         return Err(command_type
                                             .gen_err(ERROR_ARGS_AFTER_ARG_ONE_MUST_BE_COMMAND));
@@ -563,7 +576,9 @@ impl Interpreter {
                         ValueType::Bool(bool) => {
                             if *bool {
                                 match &args[1] {
-                                    ValueType::Command(value) => self.eval_command(value.clone()),
+                                    ValueType::Command(value) => {
+                                        self.eval_command(value.clone()).await
+                                    }
                                     _ => Ok(args[1].clone()),
                                 }
                             } else {
@@ -582,12 +597,16 @@ impl Interpreter {
                         ValueType::Bool(bool) => {
                             if *bool {
                                 match &args[1] {
-                                    ValueType::Command(value) => self.eval_command(value.clone()),
+                                    ValueType::Command(value) => {
+                                        self.eval_command(value.clone()).await
+                                    }
                                     _ => Ok(args[1].clone()),
                                 }
                             } else {
                                 match &args[2] {
-                                    ValueType::Command(value) => self.eval_command(value.clone()),
+                                    ValueType::Command(value) => {
+                                        self.eval_command(value.clone()).await
+                                    }
                                     _ => Ok(args[2].clone()),
                                 }
                             }
@@ -736,20 +755,30 @@ impl Interpreter {
                     return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
                 } else {
                     match &args[0] {
-                        ValueType::Text(sub) => {
-                            let output = self.interpolator.interp(
-                                &(TEMPLATE_CARROT.to_string() + sub),
-                                &|template| match self.db.get_random_subs(template) {
-                                    Ok(sub) => Some(sub),
-                                    Err(_) => None,
-                                },
-                            );
+                        ValueType::Text(sub) => match self.db.clone() {
+                            Some(fdb) => {
+                                let fdb = fdb.lock().await;
+                                let output = self.interpolator.interp(
+                                    &(TEMPLATE_CARROT.to_string() + sub),
+                                    &|template| match fdb.get_random_subs(template) {
+                                        Ok(sub) => Some(sub),
+                                        Err(_) => None,
+                                    },
+                                );
+                                drop(fdb);
 
-                            match output {
-                                Ok(o) => Ok(ValueType::Text(o)),
-                                Err(e) => Err(e.to_string()),
+                                match output {
+                                    Ok(o) => Ok(ValueType::Text(o)),
+                                    Err(e) => Err(e.to_string()),
+                                }
                             }
-                        }
+                            None => {
+                                let error =
+                                    "interpreter attempt to use database with no reference.";
+                                eprintln!("Error: {}", error);
+                                Err(error.to_string())
+                            }
+                        },
                         _ => Err(command_type.gen_err(ERROR_ARG_MUST_BE_TEXT)),
                     }
                 }
@@ -811,12 +840,12 @@ impl Interpreter {
                     loop {
                         match &args[0] {
                             ValueType::Command(command) => {
-                                match self.eval_command(command.clone())? {
+                                match self.eval_command(command.clone()).await? {
                                     ValueType::Bool(value) => {
                                         if value {
                                             for arg in &args[1..args.len()] {
                                                 if let ValueType::Command(command) = arg {
-                                                    self.eval_command(command.clone())?;
+                                                    self.eval_command(command.clone()).await?;
                                                 } else {
                                                     return Err(command_type.gen_err(
                                                         ERROR_ARGS_AFTER_ARG_ONE_MUST_BE_COMMAND,
@@ -1100,11 +1129,11 @@ impl Interpreter {
 #[cfg(test)]
 mod tests {
 
-    use crate::fsl_documentation::{self, get_command_documentation};
-    use crate::fsl_interpreter::{parser::ValueType, Interpreter};
+    use crate::fsl_documentation::get_command_documentation;
+    use crate::fsl_interpreter::Interpreter;
 
-    #[test]
-    fn validate_documentation_examples() {
+    #[tokio::test]
+    async fn validate_documentation_examples() {
         let mut interpreter = Interpreter::new();
         let documentation = get_command_documentation();
         for command in &documentation {
@@ -1112,6 +1141,7 @@ mod tests {
                 if let Some((code, expected_output)) = example.split_once("=") {
                     let output = interpreter
                         .interpret_embedded_code(code)
+                        .await
                         .unwrap()
                         .trim()
                         .to_owned();
@@ -1125,22 +1155,24 @@ mod tests {
         }
     }
 
-    #[test]
-    fn validate_random_range_command() {
+    #[tokio::test]
+    async fn validate_random_range_command() {
         let mut interpreter = Interpreter::new();
         let output = interpreter
             .interpret("print(random_range(1,10))")
+            .await
             .unwrap()
             .parse::<i64>()
             .unwrap();
         assert!(output >= 1 && output <= 10);
     }
 
-    #[test]
-    fn validate_select_random_command() {
+    #[tokio::test]
+    async fn validate_select_random_command() {
         let mut interpreter = Interpreter::new();
         let output = interpreter
             .interpret("print(select_random(\"a\", \"b\", \"c\", 1, 2, 3))")
+            .await
             .unwrap();
         let possible_outputs = ["a", "b", "c", "1", "2", "3"];
         assert!(possible_outputs.contains(&&output[..]));

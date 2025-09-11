@@ -804,15 +804,7 @@ pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Res
 /// Example output: **I love apples!**
 #[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
-    let db = ctx.data().funboy_db.lock().await;
-    let db_path = ctx.data().get_template_db_path();
-
-    let interpreted_prompt = interp_input(&text, db_path, &|template| match db
-        .get_random_subs(template)
-    {
-        Ok(sub) => Some(sub),
-        Err(_) => None,
-    });
+    let interpreted_prompt = interp_input(&text, ctx.data().funboy_db.clone()).await;
 
     match interpreted_prompt {
         Ok(output) => ctx.say_long(&output, false).await?,
