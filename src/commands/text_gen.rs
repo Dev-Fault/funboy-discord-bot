@@ -798,7 +798,12 @@ pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Res
 /// Example output: **I love apples!**
 #[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
-    let interpreted_prompt = interp_input(&text, ctx.data().funboy_db.clone()).await;
+    ctx.defer().await?;
+
+    let db_clone = ctx.data().funboy_db.clone();
+    let interpreted_prompt = tokio::task::spawn_blocking(move || interp_input(text, db_clone))
+        .await?
+        .await;
 
     match interpreted_prompt {
         Ok(output) => ctx.say_long(&output, false).await?,

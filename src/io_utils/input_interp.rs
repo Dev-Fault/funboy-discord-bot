@@ -7,11 +7,11 @@ use crate::{
     text_interpolator::TextInterpolator,
 };
 
-pub async fn interp_input(input: &str, db: Arc<Mutex<FunboyDatabase>>) -> Result<String, String> {
+pub async fn interp_input(input: String, db: Arc<Mutex<FunboyDatabase>>) -> Result<String, String> {
     let mut interpolator = TextInterpolator::default();
 
     let fdb = db.lock().await;
-    let output = interpolator.interp(input, &|template| match fdb.get_random_subs(template) {
+    let output = interpolator.interp(&input, &|template| match fdb.get_random_subs(template) {
         Ok(sub) => Some(sub),
         Err(_) => None,
     });

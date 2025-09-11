@@ -177,6 +177,8 @@ pub async fn generate_ollama(
     temperature_override: Option<f32>,
     model_override: Option<String>,
 ) -> Result<(), Error> {
+    ctx.defer().await?;
+
     let user_id = ctx.author().id;
     let mut users = ctx.data().ollama_users.lock().await;
 
@@ -189,7 +191,10 @@ pub async fn generate_ollama(
     }
     drop(users);
 
-    let interpreted_prompt = interp_input(&prompt, ctx.data().funboy_db.clone()).await;
+    let db_clone = ctx.data().funboy_db.clone();
+    let interpreted_prompt = tokio::task::spawn_blocking(move || interp_input(prompt, db_clone))
+        .await?
+        .await;
 
     let result: Result<(), Error> = {
         match interpreted_prompt {
@@ -199,7 +204,6 @@ pub async fn generate_ollama(
                     ellipsize_if_long(&prompt, 200)
                 ))
                 .await?;
-                ctx.defer().await?;
 
                 let ollama_generator = ctx.data().ollama_generator.lock().await;
                 let response = ollama_generator
