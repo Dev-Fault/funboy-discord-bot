@@ -51,8 +51,6 @@ pub async fn add_subs(
         return Ok(());
     }
 
-    let mut db = ctx.data().funboy_db.lock().await;
-
     let subs: Vec<&str> = vectorize_input(substitutes.as_str());
 
     for sub in &subs {
@@ -62,6 +60,7 @@ pub async fn add_subs(
         }
     }
 
+    let mut db = ctx.data().funboy_db.lock().await;
     match db.insert_subs(&template, Some(&subs)) {
         Err(e) => {
             ctx.say_ephemeral(&e.to_string()).await?;
@@ -203,8 +202,6 @@ pub async fn copy_subs(
 /// Example usage: **/remove_template** template: **fruit**
 #[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn remove_template(ctx: Context<'_>, template: String) -> Result<(), Error> {
-    let mut db = ctx.data().funboy_db.lock().await;
-
     match create_confirmation_interaction(ctx, REMOVE_TEMPLATE_WARNING, 30).await? {
         Some(interaction) => match interaction.data.custom_id.as_str() {
             CANCEL_BUTTON_ID => {
@@ -226,6 +223,7 @@ pub async fn remove_template(ctx: Context<'_>, template: String) -> Result<(), E
                     )
                     .await?;
 
+                let mut db = ctx.data().funboy_db.lock().await;
                 match db.remove_template(&template) {
                     Err(e) => match e {
                         rusqlite::Error::QueryReturnedNoRows => {
@@ -374,10 +372,9 @@ pub async fn remove_subs(
     template: String,
     substitutes: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().funboy_db.lock().await;
-
     let subs_to_remove: Vec<&str> = vectorize_input(substitutes.as_str());
 
+    let mut db = ctx.data().funboy_db.lock().await;
     match db.remove_subs(&template, &subs_to_remove) {
         Err(e) => match e {
             rusqlite::Error::QueryReturnedNoRows => {
@@ -428,8 +425,6 @@ pub async fn remove_subs_by_id(
     template: String,
     ids: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().funboy_db.lock().await;
-
     let mut invalid_ids: Vec<&str> = Vec::new();
     let subs_to_remove: Vec<usize> = vectorize_input(ids.as_str())
         .iter()
@@ -447,6 +442,7 @@ pub async fn remove_subs_by_id(
             .await?;
     }
 
+    let mut db = ctx.data().funboy_db.lock().await;
     match db.remove_subs_by_id(&template, &subs_to_remove) {
         Err(e) => match e {
             rusqlite::Error::QueryReturnedNoRows => {
@@ -510,13 +506,12 @@ pub async fn replace_sub(
     new_sub: String,
 ) -> Result<(), Error> {
     {
-        let mut db = ctx.data().funboy_db.lock().await;
-
         if new_sub.len() > INPUT_BYTE_LIMIT {
             ctx.say_ephemeral(ERROR_SUB_TOO_LARGE).await?;
             return Ok(());
         }
 
+        let mut db = ctx.data().funboy_db.lock().await;
         match db.replace_substitute(&template, &old_sub, &new_sub) {
             Err(e) => match e {
                 rusqlite::Error::QueryReturnedNoRows => {
@@ -567,13 +562,12 @@ pub async fn replace_sub_by_id(
     new_sub: String,
 ) -> Result<(), Error> {
     {
-        let mut db = ctx.data().funboy_db.lock().await;
-
         if new_sub.len() > INPUT_BYTE_LIMIT {
             ctx.say_ephemeral(ERROR_SUB_TOO_LARGE).await?;
             return Ok(());
         }
 
+        let mut db = ctx.data().funboy_db.lock().await;
         match db.replace_substitute_by_id(&template, id, &new_sub) {
             Err(e) => match e {
                 rusqlite::Error::QueryReturnedNoRows => {
