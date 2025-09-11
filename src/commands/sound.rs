@@ -250,8 +250,6 @@ pub async fn play_track(ctx: Context<'_>, url_or_query: String) -> Result<(), Er
         None => vec![],
     };
 
-    println!("yt_dlp args: {:?}", ytdl_args);
-
     let is_url = !url_or_query.starts_with("http");
 
     let http_client = get_http_client(ctx).await;
