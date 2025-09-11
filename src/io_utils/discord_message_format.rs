@@ -89,7 +89,7 @@ pub fn split_long_string(s: &str) -> Vec<&str> {
         message_length += word.len();
     }
 
-    if let Some(o) = s.get(output_length..output_length + message_length - 1) {
+    if let Some(o) = s.get(output_length..output_length + message_length) {
         output.push(o)
     }
 
@@ -193,7 +193,7 @@ mod tests {
         for s in &split_string {
             character_count += s.len();
         }
-        //assert!(character_count == long_string.len());
+        assert!(character_count == long_string.len());
 
         for s in &split_string {
             assert!(s.len() <= super::DISCORD_CHARACTER_LIMIT);
@@ -233,7 +233,7 @@ mod tests {
             &character_count,
             &long_string.len()
         );
-        //assert!(character_count == long_string.len());
+        assert!(character_count == long_string.len());
     }
 
     #[test]
