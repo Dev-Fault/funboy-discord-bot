@@ -189,7 +189,7 @@ pub async fn generate_ollama(
     }
     drop(users);
 
-    let db = ctx.data().template_db.lock().await;
+    let db = ctx.data().funboy_db.lock().await;
     let db_path = ctx.data().get_template_db_path();
     let interpreted_prompt = interp_input(&prompt, db_path, &|template| match db
         .get_random_subs(template)

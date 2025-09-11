@@ -11,7 +11,7 @@ struct TemplateReplacement {
 }
 
 #[derive(Debug)]
-pub struct TemplateDatabase {
+pub struct FunboyDatabase {
     db: Connection,
 }
 
@@ -24,7 +24,7 @@ pub struct SubstituteRecord {
 
 pub type UpdatedValues<'a> = Vec<&'a str>;
 
-impl TemplateDatabase {
+impl FunboyDatabase {
     fn create_tables(db: &Connection) -> rusqlite::Result<()> {
         db.execute(
             "
@@ -141,12 +141,12 @@ impl TemplateDatabase {
         Ok(())
     }
 
-    pub fn from_path(path: &str) -> rusqlite::Result<TemplateDatabase> {
+    pub fn from_path(path: &str) -> rusqlite::Result<FunboyDatabase> {
         let db = Connection::open(path)?;
 
         Self::initialize_db(&db)?;
 
-        Ok(TemplateDatabase { db })
+        Ok(FunboyDatabase { db })
     }
 
     fn find_template_id_with_transaction(
@@ -532,14 +532,14 @@ mod tests {
     #[should_panic]
     #[test]
     fn get_inside_empty_database() {
-        let db = TemplateDatabase::from_path("test1.db").unwrap();
+        let db = FunboyDatabase::from_path("test1.db").unwrap();
 
         db.get_subs("noun").unwrap();
     }
 
     #[test]
     fn insert_new_templates_with_subtitutions() {
-        let mut db = TemplateDatabase::from_path("test2.db").unwrap();
+        let mut db = FunboyDatabase::from_path("test2.db").unwrap();
 
         db.insert_subs("noun", Some(NOUNS)).unwrap();
         db.insert_subs("verb", Some(VERBS)).unwrap();
@@ -566,7 +566,7 @@ mod tests {
 
     #[test]
     fn insert_only_template() {
-        let mut db = TemplateDatabase::from_path("test4.db").unwrap();
+        let mut db = FunboyDatabase::from_path("test4.db").unwrap();
 
         db.insert_subs("template-with-no-subs", Some(&[])).unwrap();
 
@@ -576,7 +576,7 @@ mod tests {
 
     #[test]
     fn remove_substitutes() {
-        let mut db = TemplateDatabase::from_path("test5.db").unwrap();
+        let mut db = FunboyDatabase::from_path("test5.db").unwrap();
 
         db.insert_subs("noun", Some(NOUNS)).unwrap();
 
@@ -601,7 +601,7 @@ mod tests {
 
     #[test]
     fn remove_template() {
-        let mut db = TemplateDatabase::from_path("test6.db").unwrap();
+        let mut db = FunboyDatabase::from_path("test6.db").unwrap();
 
         db.insert_subs("noun", Some(NOUNS)).unwrap();
 
@@ -614,7 +614,7 @@ mod tests {
 
     #[test]
     fn remove_non_existant_template() {
-        let mut db = TemplateDatabase::from_path("test6.db").unwrap();
+        let mut db = FunboyDatabase::from_path("test6.db").unwrap();
 
         match db.remove_template("noun") {
             Ok(_) => {}
@@ -631,7 +631,7 @@ mod tests {
 
     #[test]
     fn rename_template() {
-        let mut db = TemplateDatabase::from_path("test7.db").unwrap();
+        let mut db = FunboyDatabase::from_path("test7.db").unwrap();
 
         db.clear().unwrap();
 
@@ -644,7 +644,7 @@ mod tests {
 
     #[test]
     fn insert_substitutes_with_same_name() {
-        let mut db = TemplateDatabase::from_path("test8.db").unwrap();
+        let mut db = FunboyDatabase::from_path("test8.db").unwrap();
 
         db.clear().unwrap();
 
@@ -657,7 +657,7 @@ mod tests {
 
     #[test]
     fn insert_substitutes_with_same_name_with_same_template() {
-        let mut db = TemplateDatabase::from_path("test9.db").unwrap();
+        let mut db = FunboyDatabase::from_path("test9.db").unwrap();
 
         db.clear().unwrap();
 

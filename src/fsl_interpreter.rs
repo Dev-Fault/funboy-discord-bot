@@ -1,11 +1,11 @@
 use crate::text_interpolator::{defaults::TEMPLATE_CARROT, TextInterpolator};
-use crate::TemplateDatabase;
+use crate::FunboyDatabase;
 use lexer::tokenize;
 use parser::{parse, Command, CommandType, ValueType};
 use rand::{self, Rng};
 use std::collections::HashMap;
 
-use crate::{io_utils::context_extension::MESSAGE_BYTE_LIMIT, DEFAULT_TEMPLATE_DB_PATH};
+use crate::io_utils::context_extension::MESSAGE_BYTE_LIMIT;
 
 #[allow(dead_code)]
 mod lexer;
@@ -77,7 +77,7 @@ pub struct Interpreter {
     vars: VarMap,
     output: String,
     log: Vec<ValueType>,
-    db: TemplateDatabase,
+    db: FunboyDatabase,
     interpolator: TextInterpolator,
 }
 
@@ -87,7 +87,7 @@ impl Interpreter {
             vars: VarMap::new(),
             output: String::new(),
             log: Vec::new(),
-            db: TemplateDatabase::from_path(template_db_path)
+            db: FunboyDatabase::from_path(template_db_path)
                 .expect("Funboy database failed to load."),
             interpolator: TextInterpolator::default(),
         }

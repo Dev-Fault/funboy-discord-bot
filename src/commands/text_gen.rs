@@ -6,9 +6,7 @@ use crate::io_utils::custom_components::{
 };
 use crate::io_utils::discord_message_format;
 use crate::io_utils::input_interp::interp_input;
-use crate::text_interpolator::TextInterpolator;
 use crate::{
-    fsl_interpreter::Interpreter,
     io_utils::{
         change_log::OutputLog,
         context_extension::{ContextExtension, MESSAGE_BYTE_LIMIT},
@@ -53,7 +51,7 @@ pub async fn add_subs(
         return Ok(());
     }
 
-    let mut db = ctx.data().template_db.lock().await;
+    let mut db = ctx.data().funboy_db.lock().await;
 
     let subs: Vec<&str> = vectorize_input(substitutes.as_str());
 
@@ -112,7 +110,7 @@ pub async fn add_sub(ctx: Context<'_>, template: String, substitute: String) -> 
         return Ok(());
     }
 
-    let mut db = ctx.data().template_db.lock().await;
+    let mut db = ctx.data().funboy_db.lock().await;
 
     match db.insert_sub(&template, &substitute) {
         Err(e) => {
@@ -153,7 +151,7 @@ pub async fn copy_subs(
     from_template: String,
     to_template: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().template_db.lock().await;
+    let mut db = ctx.data().funboy_db.lock().await;
 
     if let Ok(subs) = db.get_subs(&from_template) {
         let subs: Vec<&str> = subs.iter().map(|s| s.as_str()).collect();
@@ -205,7 +203,7 @@ pub async fn copy_subs(
 /// Example usage: **/remove_template** template: **fruit**
 #[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn remove_template(ctx: Context<'_>, template: String) -> Result<(), Error> {
-    let mut db = ctx.data().template_db.lock().await;
+    let mut db = ctx.data().funboy_db.lock().await;
 
     match create_confirmation_interaction(ctx, REMOVE_TEMPLATE_WARNING, 30).await? {
         Some(interaction) => match interaction.data.custom_id.as_str() {
@@ -277,7 +275,7 @@ pub async fn remove_sub(
     template: String,
     substitute: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().template_db.lock().await;
+    let mut db = ctx.data().funboy_db.lock().await;
 
     match db.remove_sub(&template, &substitute) {
         Err(e) => match e {
@@ -324,7 +322,7 @@ pub async fn remove_sub(
 /// Example usage: **/remove_sub** template: **fruit** id: **1234**
 #[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn remove_sub_by_id(ctx: Context<'_>, template: String, id: usize) -> Result<(), Error> {
-    let mut db = ctx.data().template_db.lock().await;
+    let mut db = ctx.data().funboy_db.lock().await;
 
     match db.remove_sub_by_id(&template, id) {
         Err(e) => match e {
@@ -376,7 +374,7 @@ pub async fn remove_subs(
     template: String,
     substitutes: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().template_db.lock().await;
+    let mut db = ctx.data().funboy_db.lock().await;
 
     let subs_to_remove: Vec<&str> = vectorize_input(substitutes.as_str());
 
@@ -430,7 +428,7 @@ pub async fn remove_subs_by_id(
     template: String,
     ids: String,
 ) -> Result<(), Error> {
-    let mut db = ctx.data().template_db.lock().await;
+    let mut db = ctx.data().funboy_db.lock().await;
 
     let mut invalid_ids: Vec<&str> = Vec::new();
     let subs_to_remove: Vec<usize> = vectorize_input(ids.as_str())
@@ -512,7 +510,7 @@ pub async fn replace_sub(
     new_sub: String,
 ) -> Result<(), Error> {
     {
-        let mut db = ctx.data().template_db.lock().await;
+        let mut db = ctx.data().funboy_db.lock().await;
 
         if new_sub.len() > INPUT_BYTE_LIMIT {
             ctx.say_ephemeral(ERROR_SUB_TOO_LARGE).await?;
@@ -569,7 +567,7 @@ pub async fn replace_sub_by_id(
     new_sub: String,
 ) -> Result<(), Error> {
     {
-        let mut db = ctx.data().template_db.lock().await;
+        let mut db = ctx.data().funboy_db.lock().await;
 
         if new_sub.len() > INPUT_BYTE_LIMIT {
             ctx.say_ephemeral(ERROR_SUB_TOO_LARGE).await?;
@@ -632,7 +630,7 @@ pub async fn rename_template(ctx: Context<'_>, from: String, to: String) -> Resu
         return Ok(());
     }
 
-    let mut db = ctx.data().template_db.lock().await;
+    let mut db = ctx.data().funboy_db.lock().await;
 
     match db.rename_template(&from, &to) {
         Err(e) => {
@@ -663,7 +661,7 @@ async fn say_list(
     formatter: MessageListFormatter,
     show_ids: bool,
 ) -> Result<(), Error> {
-    let db = ctx.data().template_db.lock().await;
+    let db = ctx.data().funboy_db.lock().await;
 
     match template {
         Some(tmp) => match db.get_sub_records(&tmp) {
@@ -806,7 +804,7 @@ pub async fn list_numerically(ctx: Context<'_>, template: Option<String>) -> Res
 /// Example output: **I love apples!**
 #[poise::command(slash_command, prefix_command, category = "Text substitution")]
 pub async fn generate(ctx: Context<'_>, text: String) -> Result<(), Error> {
-    let db = ctx.data().template_db.lock().await;
+    let db = ctx.data().funboy_db.lock().await;
     let db_path = ctx.data().get_template_db_path();
 
     let interpreted_prompt = interp_input(&text, db_path, &|template| match db
