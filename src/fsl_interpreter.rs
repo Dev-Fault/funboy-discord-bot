@@ -78,6 +78,7 @@ impl VarMap {
 #[derive(Debug)]
 pub struct Interpreter {
     vars: VarMap,
+    copy_buffer: ValueType,
     output: String,
     log: Vec<ValueType>,
     db: Option<Arc<Mutex<FunboyDatabase>>>,
@@ -87,6 +88,7 @@ pub struct Interpreter {
 impl Interpreter {
     pub fn new() -> Self {
         Self {
+            copy_buffer: ValueType::None,
             vars: VarMap::new(),
             output: String::new(),
             log: Vec::new(),
@@ -97,6 +99,7 @@ impl Interpreter {
 
     pub fn new_with_db(db: Arc<Mutex<FunboyDatabase>>) -> Self {
         Self {
+            copy_buffer: ValueType::None,
             vars: VarMap::new(),
             output: String::new(),
             log: Vec::new(),
@@ -153,8 +156,18 @@ impl Interpreter {
     pub async fn interpret(&mut self, code: &str) -> Result<String, String> {
         let commands = parse(tokenize(code))?;
 
+        let mut final_value = ValueType::None;
+
         for command in commands {
-            self.eval_command(command).await?;
+            final_value = self.eval_command(command).await?;
+        }
+
+        match final_value {
+            ValueType::List(_) => {}
+            ValueType::Identifier(_) => {}
+            ValueType::Command(_) => {}
+            ValueType::None => {}
+            _ => self.output.push_str(&final_value.to_string()),
         }
 
         Ok(self.output.drain(..).collect())
@@ -456,8 +469,21 @@ impl Interpreter {
                 }
             }
             CommandType::Copy => {
-                if args.len() < 2 {
-                    return Err(command_type.gen_err(ERROR_TWO_OR_MORE_ARGS));
+                if args.is_empty() {
+                    return Err(command_type.gen_err("must have one or more arguments"));
+                } else if args.len() == 1 {
+                    match &args[0] {
+                        ValueType::Identifier(_) => {
+                            Err(command_type.gen_err(ERROR_ARG_ONE_MUST_NOT_BE_IDENTIFIER))
+                        }
+                        ValueType::None => {
+                            Err(command_type.gen_err(ERROR_ARG_ONE_MUST_NOT_BE_NONE))
+                        }
+                        _ => {
+                            self.copy_buffer = args[0].clone();
+                            Ok(ValueType::None)
+                        }
+                    }
                 } else if args.len() == 2 {
                     if let ValueType::Identifier(identifier) = &args[1] {
                         match &args[0] {
@@ -482,41 +508,40 @@ impl Interpreter {
                     } else {
                         return Err(command_type.gen_err(ERROR_ARG_TWO_MUST_BE_IDENTIFIER));
                     }
-                } else {
-                    if let ValueType::Identifier(identifier) = &args[args.len() - 1] {
-                        let mut list: Vec<ValueType> = Vec::new();
-                        for arg in &args[0..args.len() - 1] {
-                            match arg {
-                                ValueType::Identifier(_) => {
-                                    return Err(
-                                        command_type.gen_err("cannot store arg of type Identifier")
-                                    );
-                                }
-                                ValueType::None => {
-                                    return Err(
-                                        command_type.gen_err("cannot store arg of type None")
-                                    );
-                                }
-                                _ => list.push(arg.clone()),
-                            };
-                        }
-                        match self
-                            .vars
-                            .insert_var(identifier.to_string(), ValueType::List(list))
-                        {
-                            Ok(_) => return Ok(ValueType::None),
-                            Err(e) => {
-                                return Err(e);
+                } else if let ValueType::Identifier(identifier) = &args[args.len() - 1] {
+                    let mut list: Vec<ValueType> = Vec::new();
+                    for arg in &args[0..args.len() - 1] {
+                        match arg {
+                            ValueType::Identifier(_) => {
+                                return Err(
+                                    command_type.gen_err("cannot store arg of type Identifier")
+                                );
                             }
-                        }
-                    } else {
-                        return Err(command_type.gen_err("last arg must be of type Identifier"));
+                            ValueType::None => {
+                                return Err(command_type.gen_err("cannot store arg of type None"));
+                            }
+                            _ => list.push(arg.clone()),
+                        };
                     }
+                    match self
+                        .vars
+                        .insert_var(identifier.to_string(), ValueType::List(list))
+                    {
+                        Ok(_) => return Ok(ValueType::None),
+                        Err(e) => {
+                            return Err(e);
+                        }
+                    }
+                } else {
+                    return Err(command_type.gen_err("last arg must be of type Identifier"));
                 }
             }
             CommandType::Paste => {
-                if args.len() != 1 {
-                    return Err(command_type.gen_err(ERROR_EXACTLY_ONE_ARG));
+                if args.len() > 1 {
+                    return Err(command_type.gen_err("cannot have more than 1 argument"));
+                }
+                if args.is_empty() {
+                    Ok(self.copy_buffer.clone())
                 } else {
                     match &args[0] {
                         ValueType::Identifier(identifier) => match self.vars.get_var(identifier) {
