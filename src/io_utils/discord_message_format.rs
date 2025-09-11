@@ -1,3 +1,8 @@
+use std::borrow::Borrow;
+
+use ollama_rs::history::ChatHistory;
+use tokio::io::split;
+
 use super::quote_filter::QuoteFilter;
 
 pub const DISCORD_CHARACTER_LIMIT: usize = 2000;
@@ -50,14 +55,30 @@ pub fn split_message(message: &[&str]) -> Vec<String> {
     message_split
 }
 
+pub fn split_block<'a>(s: &'a str) -> Vec<&'a str> {
+    let mut output = Vec::new();
+    let blocks: usize = s.len() / DISCORD_CHARACTER_LIMIT;
+
+    for i in 0..blocks {
+        output.push(&s[i * DISCORD_CHARACTER_LIMIT..(i + 1) * DISCORD_CHARACTER_LIMIT]);
+    }
+
+    if blocks * DISCORD_CHARACTER_LIMIT < s.len() {
+        output.push(&s[blocks * DISCORD_CHARACTER_LIMIT..s.len()]);
+    }
+
+    output
+}
+
+// TODO: Fix bugs with this
 pub fn split_long_string(s: &str) -> Vec<&str> {
     let mut output = Vec::new();
 
     let mut output_length = 0;
     let mut message_length = 0;
 
-    for word in s.split(' ').collect::<Vec<&str>>() {
-        if message_length + word.len() + 1 > DISCORD_CHARACTER_LIMIT {
+    for word in s.split_inclusive(' ').collect::<Vec<&str>>() {
+        if message_length + word.len() > DISCORD_CHARACTER_LIMIT {
             output.push(
                 s.get(output_length..output_length + message_length)
                     .unwrap_or_default(),
@@ -65,15 +86,25 @@ pub fn split_long_string(s: &str) -> Vec<&str> {
             output_length += message_length;
             message_length = 0;
         }
-        message_length += word.len() + 1;
+        message_length += word.len();
     }
 
-    output.push(
-        s.get(output_length..output_length + message_length - 1)
-            .unwrap_or_default(),
-    );
+    if let Some(o) = s.get(output_length..output_length + message_length - 1) {
+        output.push(o)
+    }
 
-    output
+    let mut output2 = Vec::new();
+    for message in output {
+        if message.len() > DISCORD_CHARACTER_LIMIT {
+            for block in split_block(message) {
+                output2.push(block);
+            }
+        } else {
+            output2.push(message);
+        }
+    }
+
+    output2
 }
 
 pub fn ellipsize_if_long(s: &str, limit: usize) -> String {
@@ -158,9 +189,51 @@ mod tests {
 
         let split_string = split_long_string(&long_string);
 
-        for s in split_string {
+        let mut character_count = 0;
+        for s in &split_string {
+            character_count += s.len();
+        }
+        //assert!(character_count == long_string.len());
+
+        for s in &split_string {
             assert!(s.len() <= super::DISCORD_CHARACTER_LIMIT);
         }
+    }
+
+    #[test]
+    fn split_a_long_string_with_spaces() {
+        let mut long_string = String::with_capacity(23000);
+
+        for i in 0..23000 {
+            // also test with spaces at random positions
+            if i == 2004 || i == 4500 {
+                long_string.push(' ');
+            } else {
+                long_string.push('0');
+            }
+        }
+
+        long_string.insert_str(
+            8438,
+            " some normal words that you would find in any message on discord ",
+        );
+
+        dbg!(&long_string);
+
+        let split_string = split_long_string(&long_string);
+
+        let mut character_count = 0;
+        for s in &split_string {
+            println!("\nMessage: {}\nLength: {}\n\n", &s, &s.len());
+            character_count += s.len();
+            assert!(s.len() <= super::DISCORD_CHARACTER_LIMIT);
+        }
+        println!(
+            "Count: {} actual length: {}",
+            &character_count,
+            &long_string.len()
+        );
+        //assert!(character_count == long_string.len());
     }
 
     #[test]
@@ -197,6 +270,7 @@ mod tests {
         message.push(regular_string_4);
 
         for split in split_message(&message.iter().map(|s| &s[..]).collect::<Vec<&str>>()[..]) {
+            dbg!(split.len());
             assert!(split.len() <= super::DISCORD_CHARACTER_LIMIT);
         }
     }
