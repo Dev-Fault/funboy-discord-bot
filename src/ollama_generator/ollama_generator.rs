@@ -11,6 +11,7 @@ const DEFAULT_MAX_PREDICT: u16 = 200;
 const PARAMETER_NOT_SET_TEXT: &str = "Default";
 pub const MAX_PREDICT: u16 = 2000;
 
+#[derive(Clone)]
 pub struct OllamaParameters {
     pub temperature: Option<f32>,
     pub repeat_penalty: Option<f32>,
@@ -36,14 +37,21 @@ impl OllamaParameters {
     }
 }
 
-pub struct OllamaConfig {
+impl Default for OllamaParameters {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+#[derive(Clone)]
+pub struct OllamaSettings {
     system_prompt: String,
     template: String,
     output_limit: u16,
     parameters: OllamaParameters,
 }
 
-impl OllamaConfig {
+impl OllamaSettings {
     pub fn new() -> Self {
         Self {
             system_prompt: DEFAULT_SYSTEM_PROMPT.to_string(),
@@ -52,9 +60,64 @@ impl OllamaConfig {
             parameters: OllamaParameters::new(),
         }
     }
+
+    pub fn set_system_prompt(&mut self, prompt: &str) {
+        self.system_prompt = prompt.to_string();
+    }
+
+    pub fn reset_system_prompt(&mut self) {
+        self.system_prompt = DEFAULT_SYSTEM_PROMPT.to_string();
+    }
+
+    pub fn set_template(&mut self, template: &str) {
+        self.template = template.to_string();
+    }
+
+    pub fn reset_template(&mut self) {
+        self.template = DEFAULT_TEMPLATE.to_string();
+    }
+
+    pub fn set_output_limit(&mut self, limit: u16) -> bool {
+        if limit > MAX_PREDICT {
+            false
+        } else {
+            self.output_limit = limit;
+            true
+        }
+    }
+
+    pub fn set_parameters(&mut self, parameters: OllamaParameters) {
+        self.parameters = parameters;
+    }
+
+    pub fn reset_parameters(&mut self) {
+        self.parameters.reset();
+    }
+
+    pub fn set_temperature(&mut self, temperature: f32) {
+        self.parameters.temperature = Some(temperature);
+    }
+
+    pub fn set_repeat_penalty(&mut self, repeat_penalty: f32) {
+        self.parameters.repeat_penalty = Some(repeat_penalty);
+    }
+
+    pub fn set_top_k(&mut self, top_k: u32) {
+        self.parameters.top_k = Some(top_k);
+    }
+
+    pub fn set_top_p(&mut self, top_p: f32) {
+        self.parameters.top_p = Some(top_p);
+    }
 }
 
-impl ToString for OllamaConfig {
+impl Default for OllamaSettings {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl ToString for OllamaSettings {
     fn to_string(&self) -> String {
         format!("System Prompt: {}\nTemplate: {}\nOutput Limit: {}\nTemperature: {}\nRepeat Penalty: {}\nTop_k: {}\nTop_p: {}",
             self.system_prompt,
@@ -71,7 +134,6 @@ impl ToString for OllamaConfig {
 pub struct OllamaGenerator {
     ollama: Ollama,
     current_model: Option<String>,
-    config: OllamaConfig,
 }
 
 impl OllamaGenerator {
@@ -79,7 +141,6 @@ impl OllamaGenerator {
         Self {
             ollama: Ollama::default(),
             current_model: None,
-            config: OllamaConfig::new(),
         }
     }
 
@@ -91,10 +152,6 @@ impl OllamaGenerator {
         self.ollama
             .show_model_info(self.current_model.clone().unwrap_or("".to_string()))
             .await
-    }
-
-    pub fn get_config(&self) -> &OllamaConfig {
-        &self.config
     }
 
     pub async fn get_current_model(&self) -> Option<String> {
@@ -114,56 +171,10 @@ impl OllamaGenerator {
         self.current_model = Some(model.to_string());
     }
 
-    pub fn set_system_prompt(&mut self, prompt: &str) {
-        self.config.system_prompt = prompt.to_string();
-    }
-
-    pub fn reset_system_prompt(&mut self) {
-        self.config.system_prompt = DEFAULT_SYSTEM_PROMPT.to_string();
-    }
-
-    pub fn set_template(&mut self, template: &str) {
-        self.config.template = template.to_string();
-    }
-
-    pub fn reset_template(&mut self) {
-        self.config.template = DEFAULT_TEMPLATE.to_string();
-    }
-
-    pub fn set_output_limit(&mut self, limit: u16) -> bool {
-        if limit > MAX_PREDICT {
-            false
-        } else {
-            self.config.output_limit = limit;
-            true
-        }
-    }
-
-    pub fn set_parameters(&mut self, parameters: OllamaParameters) {
-        self.config.parameters = parameters;
-    }
-
-    pub fn reset_parameters(&mut self) {
-        self.config.parameters.reset();
-    }
-
-    pub fn set_temperature(&mut self, temperature: f32) {
-        self.config.parameters.temperature = Some(temperature);
-    }
-    pub fn set_repeat_penalty(&mut self, repeat_penalty: f32) {
-        self.config.parameters.repeat_penalty = Some(repeat_penalty);
-    }
-    pub fn set_top_k(&mut self, top_k: u32) {
-        self.config.parameters.top_k = Some(top_k);
-    }
-    pub fn set_top_p(&mut self, top_p: f32) {
-        self.config.parameters.top_p = Some(top_p);
-    }
-
-    fn generate_options(&self) -> ModelOptions {
+    fn generate_options(&self, ollama_settings: &OllamaSettings) -> ModelOptions {
         let mut options = ModelOptions::default();
-        let parameters = &self.config.parameters;
-        options = options.num_predict(self.config.output_limit.into());
+        let parameters = &ollama_settings.parameters;
+        options = options.num_predict(ollama_settings.output_limit.into());
         if let Some(temperature) = parameters.temperature {
             options = options.temperature(temperature);
         }
@@ -182,13 +193,10 @@ impl OllamaGenerator {
     pub async fn generate(
         &self,
         prompt: &str,
-        temperature_override: Option<f32>,
+        ollama_settings: OllamaSettings,
         model_override: Option<String>,
     ) -> Result<GenerationResponse, OllamaError> {
-        let mut override_options = self.generate_options();
-        if let Some(t) = temperature_override {
-            override_options = override_options.temperature(t);
-        }
+        let override_options = self.generate_options(&ollama_settings);
         let model = match model_override {
             Some(model) => model,
             None => match &self.current_model {
@@ -206,8 +214,14 @@ impl OllamaGenerator {
         };
 
         let mut request = GenerationRequest::new(model, prompt).options(override_options);
-        request = request.system(self.config.system_prompt.clone());
-        request = request.template(self.config.template.clone());
+        request = request.system(ollama_settings.system_prompt.clone());
+        request = request.template(ollama_settings.template.clone());
         self.ollama.generate(request).await
+    }
+}
+
+impl Default for OllamaGenerator {
+    fn default() -> Self {
+        Self::new()
     }
 }

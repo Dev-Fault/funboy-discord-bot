@@ -1,8 +1,11 @@
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use ::serenity::all::{ClientBuilder, FullEvent, GatewayIntents, Interaction};
 use io_utils::custom_components::{CustomComponent, TrackComponent};
-use ollama_generator::ollama_generator::OllamaGenerator;
+use ollama_generator::ollama_generator::{OllamaGenerator, OllamaSettings};
 use reqwest::Client as HttpClient;
 use serenity::all::UserId;
 use songbird::{typemap::TypeMapKey, SerenityInit};
@@ -25,12 +28,15 @@ pub const DEFAULT_TEMPLATE_DB_PATH: &str = "funboy.db";
 pub type Error = Box<dyn std::error::Error + Send + Sync>;
 pub type Context<'a> = poise::Context<'a, Data, Error>;
 
+pub type OllamaSettingsMap = HashMap<UserId, OllamaSettings>;
+
 pub struct Data {
     pub funboy_db: Arc<Mutex<FunboyDatabase>>,
     pub track_list: Arc<Mutex<TrackList>>,
     pub track_player_lock: Arc<Mutex<()>>,
     pub ollama_users: Mutex<HashSet<UserId>>,
     pub ollama_generator: Mutex<OllamaGenerator>,
+    pub ollama_settings_map: Arc<Mutex<OllamaSettingsMap>>,
 
     yt_dlp_cookies_path: Option<String>,
     imgur_client_id: Option<String>,
@@ -124,6 +130,7 @@ async fn main() {
                 commands::ollama::reset_ollama_system_prompt(),
                 commands::ollama::set_ollama_template(),
                 commands::ollama::reset_ollama_template(),
+                commands::ollama::reset_ollama_parameters(),
                 commands::ollama::generate_ollama(),
             ],
             event_handler: |ctx, event, _framework_ctx, data| {
@@ -161,6 +168,7 @@ async fn main() {
                     yt_dlp_cookies_path,
                     funboy_db_path,
                     ollama_generator: Mutex::new(OllamaGenerator::new()),
+                    ollama_settings_map: Arc::new(Mutex::new(OllamaSettingsMap::new())),
                     track_list: Mutex::new(TrackList::new()).into(),
                     imgur_client_id,
                     track_player_lock: Arc::new(Mutex::new(())),

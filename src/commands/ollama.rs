@@ -1,10 +1,12 @@
+use serenity::all::UserId;
+
 use crate::{
     io_utils::{
         context_extension::ContextExtension, discord_message_format::ellipsize_if_long,
         input_interp::interp_input,
     },
-    ollama_generator::ollama_generator::MAX_PREDICT,
-    Context, Error,
+    ollama_generator::ollama_generator::{OllamaSettings, MAX_PREDICT},
+    Context, Error, OllamaSettingsMap,
 };
 
 const ERROR_OLLAMA_UNAVAILABLE: &str = "Error: Ollama service not available.";
@@ -15,7 +17,7 @@ pub async fn show_ollama_models(ctx: Context<'_>) -> Result<(), Error> {
     let ollama_generator = ctx.data().ollama_generator.lock().await;
     let models = ollama_generator.get_models().await;
     match models {
-        Err(e) => {
+        Err(_) => {
             ctx.say_ephemeral(ERROR_OLLAMA_UNAVAILABLE).await?;
         }
         Ok(models) => {
@@ -31,18 +33,39 @@ pub async fn show_ollama_models(ctx: Context<'_>) -> Result<(), Error> {
     Ok(())
 }
 
-/// Show ollama config
+fn get_ollama_user_settings<'a>(
+    ollama_settings_map: &'a mut OllamaSettingsMap,
+    user_id: &UserId,
+) -> &'a OllamaSettings {
+    ollama_settings_map.entry(*user_id).or_default();
+    ollama_settings_map.get(user_id).unwrap()
+}
+
+fn get_ollama_user_settings_mut<'a>(
+    ollama_settings_map: &'a mut OllamaSettingsMap,
+    user_id: &UserId,
+) -> &'a mut OllamaSettings {
+    ollama_settings_map.entry(*user_id).or_default();
+    ollama_settings_map.get_mut(user_id).unwrap()
+}
+
+/// Show ollama settings
 #[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn show_ollama_settings(ctx: Context<'_>) -> Result<(), Error> {
-    let ollama_generator = ctx.data().ollama_generator.lock().await;
-    let current_model = match ollama_generator.get_current_model().await {
+    let user_id = ctx.author().id;
+    let mut ollama_settings_map = ctx.data().ollama_settings_map.lock().await;
+    let settings = get_ollama_user_settings(&mut ollama_settings_map, &user_id);
+
+    /*let current_model = match ollama_generator.get_current_model().await {
         Some(name) => name,
         None => "None".to_string(),
-    };
+    };*/
+
     ctx.say_ephemeral(&format!(
         "Current Model: {}\n{}",
-        current_model,
-        &ollama_generator.get_config().to_string()
+        //current_model,
+        "",
+        &settings.to_string()
     ))
     .await?;
 
@@ -55,7 +78,7 @@ pub async fn set_ollama_model(ctx: Context<'_>, model: String) -> Result<(), Err
     let mut ollama_generator = ctx.data().ollama_generator.lock().await;
     let models = ollama_generator.get_models().await;
     match models {
-        Err(e) => {
+        Err(_) => {
             ctx.say_ephemeral(ERROR_OLLAMA_UNAVAILABLE).await?;
         }
         Ok(models) => {
@@ -88,18 +111,21 @@ pub async fn set_ollama_parameters(
     top_k: Option<u32>,
     top_p: Option<f32>,
 ) -> Result<(), Error> {
-    let mut ollama_generator = ctx.data().ollama_generator.lock().await;
+    let user_id = ctx.author().id;
+    let mut ollama_settings_map = ctx.data().ollama_settings_map.lock().await;
+    let settings = get_ollama_user_settings_mut(&mut ollama_settings_map, &user_id);
+
     if let Some(temperature) = temperature {
-        ollama_generator.set_temperature(temperature);
+        settings.set_temperature(temperature);
     }
     if let Some(repeat_penalty) = repeat_penalty {
-        ollama_generator.set_repeat_penalty(repeat_penalty);
+        settings.set_repeat_penalty(repeat_penalty);
     }
     if let Some(top_k) = top_k {
-        ollama_generator.set_top_k(top_k);
+        settings.set_top_k(top_k);
     }
     if let Some(top_p) = top_p {
-        ollama_generator.set_top_p(top_p);
+        settings.set_top_p(top_p);
     }
     ctx.say_ephemeral("Ollama parameters updated.").await?;
     Ok(())
@@ -108,8 +134,11 @@ pub async fn set_ollama_parameters(
 /// Reset ollama model parameters to default
 #[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn reset_ollama_parameters(ctx: Context<'_>) -> Result<(), Error> {
-    let mut ollama_generator = ctx.data().ollama_generator.lock().await;
-    ollama_generator.reset_parameters();
+    let user_id = ctx.author().id;
+    let mut ollama_settings_map = ctx.data().ollama_settings_map.lock().await;
+    let settings = get_ollama_user_settings_mut(&mut ollama_settings_map, &user_id);
+
+    settings.reset_parameters();
     ctx.say_ephemeral("Ollama parameters reset.").await?;
     Ok(())
 }
@@ -120,8 +149,11 @@ pub async fn set_ollama_system_prompt(
     ctx: Context<'_>,
     system_prompt: String,
 ) -> Result<(), Error> {
-    let mut ollama_generator = ctx.data().ollama_generator.lock().await;
-    ollama_generator.set_system_prompt(&system_prompt);
+    let user_id = ctx.author().id;
+    let mut ollama_settings_map = ctx.data().ollama_settings_map.lock().await;
+    let settings = get_ollama_user_settings_mut(&mut ollama_settings_map, &user_id);
+
+    settings.set_system_prompt(&system_prompt);
     ctx.say_ephemeral("Ollama system prompt updated.").await?;
     Ok(())
 }
@@ -129,8 +161,11 @@ pub async fn set_ollama_system_prompt(
 /// Reset the system prompt for ollama to default
 #[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn reset_ollama_system_prompt(ctx: Context<'_>) -> Result<(), Error> {
-    let mut ollama_generator = ctx.data().ollama_generator.lock().await;
-    ollama_generator.reset_system_prompt();
+    let user_id = ctx.author().id;
+    let mut ollama_settings_map = ctx.data().ollama_settings_map.lock().await;
+    let settings = get_ollama_user_settings_mut(&mut ollama_settings_map, &user_id);
+
+    settings.reset_system_prompt();
     ctx.say_ephemeral("Ollama system prompt reset.").await?;
     Ok(())
 }
@@ -138,8 +173,11 @@ pub async fn reset_ollama_system_prompt(ctx: Context<'_>) -> Result<(), Error> {
 /// Set the template for ollama
 #[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn set_ollama_template(ctx: Context<'_>, template: String) -> Result<(), Error> {
-    let mut ollama_generator = ctx.data().ollama_generator.lock().await;
-    ollama_generator.set_template(&template);
+    let user_id = ctx.author().id;
+    let mut ollama_settings_map = ctx.data().ollama_settings_map.lock().await;
+    let settings = get_ollama_user_settings_mut(&mut ollama_settings_map, &user_id);
+
+    settings.set_template(&template);
     ctx.say_ephemeral("Ollama system prompt updated.").await?;
     Ok(())
 }
@@ -147,8 +185,11 @@ pub async fn set_ollama_template(ctx: Context<'_>, template: String) -> Result<(
 /// Reset the template for ollama to default
 #[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn reset_ollama_template(ctx: Context<'_>) -> Result<(), Error> {
-    let mut ollama_generator = ctx.data().ollama_generator.lock().await;
-    ollama_generator.reset_template();
+    let user_id = ctx.author().id;
+    let mut ollama_settings_map = ctx.data().ollama_settings_map.lock().await;
+    let settings = get_ollama_user_settings_mut(&mut ollama_settings_map, &user_id);
+
+    settings.reset_template();
     ctx.say_ephemeral("Ollama template reset.").await?;
     Ok(())
 }
@@ -156,8 +197,11 @@ pub async fn reset_ollama_template(ctx: Context<'_>) -> Result<(), Error> {
 /// Set the maximum amount of words ollama can generate per prompt
 #[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn set_ollama_word_limit(ctx: Context<'_>, limit: u16) -> Result<(), Error> {
-    let mut ollama_generator = ctx.data().ollama_generator.lock().await;
-    if ollama_generator.set_output_limit(limit) {
+    let user_id = ctx.author().id;
+    let mut ollama_settings_map = ctx.data().ollama_settings_map.lock().await;
+    let settings = get_ollama_user_settings_mut(&mut ollama_settings_map, &user_id);
+
+    if settings.set_output_limit(limit) {
         ctx.say_ephemeral("Ollama parameters updated.").await?;
     } else {
         ctx.say_ephemeral(&format!(
@@ -174,7 +218,6 @@ pub async fn set_ollama_word_limit(ctx: Context<'_>, limit: u16) -> Result<(), E
 pub async fn generate_ollama(
     ctx: Context<'_>,
     prompt: String,
-    temperature_override: Option<f32>,
     model_override: Option<String>,
 ) -> Result<(), Error> {
     ctx.defer().await?;
@@ -205,9 +248,14 @@ pub async fn generate_ollama(
                 ))
                 .await?;
 
+                let user_id = ctx.author().id;
+                let mut ollama_settings_map = ctx.data().ollama_settings_map.lock().await;
+                let settings =
+                    get_ollama_user_settings_mut(&mut ollama_settings_map, &user_id).clone();
+                drop(ollama_settings_map);
                 let ollama_generator = ctx.data().ollama_generator.lock().await;
                 let response = ollama_generator
-                    .generate(&prompt, temperature_override, model_override)
+                    .generate(&prompt, settings, model_override)
                     .await;
                 match response {
                     Err(e) => {
