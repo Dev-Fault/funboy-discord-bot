@@ -133,14 +133,12 @@ impl ToString for OllamaSettings {
 
 pub struct OllamaGenerator {
     ollama: Ollama,
-    current_model: Option<String>,
 }
 
 impl OllamaGenerator {
     pub fn new() -> Self {
         Self {
             ollama: Ollama::default(),
-            current_model: None,
         }
     }
 
@@ -148,27 +146,16 @@ impl OllamaGenerator {
         self.ollama.list_local_models().await
     }
 
-    pub async fn get_model_info(&self) -> Result<ModelInfo, OllamaError> {
-        self.ollama
-            .show_model_info(self.current_model.clone().unwrap_or("".to_string()))
-            .await
+    pub async fn get_model_info(&self, model: String) -> Result<ModelInfo, OllamaError> {
+        self.ollama.show_model_info(model).await
     }
 
-    pub async fn get_current_model(&self) -> Option<String> {
-        match &self.current_model {
-            Some(name) => Some(name.to_string()),
-            None => {
-                let available_models = self.get_models().await;
-                match available_models {
-                    Ok(models) => Some(models[0].name.clone()),
-                    Err(_) => None,
-                }
-            }
+    pub async fn get_default_model(&self) -> Option<String> {
+        let available_models = self.get_models().await;
+        match available_models {
+            Ok(models) => Some(models[0].name.clone()),
+            Err(_) => None,
         }
-    }
-
-    pub fn set_current_model(&mut self, model: &str) {
-        self.current_model = Some(model.to_string());
     }
 
     fn generate_options(&self, ollama_settings: &OllamaSettings) -> ModelOptions {
@@ -194,23 +181,20 @@ impl OllamaGenerator {
         &self,
         prompt: &str,
         ollama_settings: OllamaSettings,
-        model_override: Option<String>,
+        model: Option<String>,
     ) -> Result<GenerationResponse, OllamaError> {
         let override_options = self.generate_options(&ollama_settings);
-        let model = match model_override {
-            Some(model) => model,
-            None => match &self.current_model {
-                Some(name) => name.to_string(),
-                None => {
-                    let available_models = self.get_models().await;
-                    match available_models {
-                        Ok(models) => models[0].name.clone(),
-                        Err(e) => {
-                            return Err(e);
-                        }
+        let model = match model {
+            Some(name) => name.to_string(),
+            None => {
+                let available_models = self.get_models().await;
+                match available_models {
+                    Ok(models) => models[0].name.clone(),
+                    Err(e) => {
+                        return Err(e);
                     }
                 }
-            },
+            }
         };
 
         let mut request = GenerationRequest::new(model, prompt).options(override_options);

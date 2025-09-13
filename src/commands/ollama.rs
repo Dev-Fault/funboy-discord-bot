@@ -56,15 +56,11 @@ pub async fn show_ollama_settings(ctx: Context<'_>) -> Result<(), Error> {
     let mut ollama_settings_map = ctx.data().ollama_settings_map.lock().await;
     let settings = get_ollama_user_settings(&mut ollama_settings_map, &user_id);
 
-    /*let current_model = match ollama_generator.get_current_model().await {
-        Some(name) => name,
-        None => "None".to_string(),
-    };*/
+    let current_model = ctx.data().ollama_model.lock().await.clone();
 
     ctx.say_ephemeral(&format!(
         "Current Model: {}\n{}",
-        //current_model,
-        "",
+        &current_model.unwrap_or("Default".to_string()),
         &settings.to_string()
     ))
     .await?;
@@ -75,8 +71,10 @@ pub async fn show_ollama_settings(ctx: Context<'_>) -> Result<(), Error> {
 /// Set the current ollama model
 #[poise::command(slash_command, prefix_command, category = "Ollama")]
 pub async fn set_ollama_model(ctx: Context<'_>, model: String) -> Result<(), Error> {
-    let mut ollama_generator = ctx.data().ollama_generator.lock().await;
+    let ollama_generator = ctx.data().ollama_generator.lock().await;
+    let mut current_model = ctx.data().ollama_model.lock().await;
     let models = ollama_generator.get_models().await;
+    drop(ollama_generator);
     match models {
         Err(_) => {
             ctx.say_ephemeral(ERROR_OLLAMA_UNAVAILABLE).await?;
@@ -87,7 +85,7 @@ pub async fn set_ollama_model(ctx: Context<'_>, model: String) -> Result<(), Err
                 .map(|model| &model.name)
                 .any(|name| *name == model)
             {
-                ollama_generator.set_current_model(&model);
+                *current_model = Some(model.clone());
                 ctx.say_ephemeral(&format!("Set ollama model to: \"{}\"", model))
                     .await?;
             } else {
@@ -215,11 +213,7 @@ pub async fn set_ollama_word_limit(ctx: Context<'_>, limit: u16) -> Result<(), E
 
 /// Generate an ollama response from prompt
 #[poise::command(slash_command, prefix_command, category = "Ollama")]
-pub async fn generate_ollama(
-    ctx: Context<'_>,
-    prompt: String,
-    model_override: Option<String>,
-) -> Result<(), Error> {
+pub async fn generate_ollama(ctx: Context<'_>, prompt: String) -> Result<(), Error> {
     ctx.defer().await?;
 
     let user_id = ctx.author().id;
@@ -254,9 +248,8 @@ pub async fn generate_ollama(
                     get_ollama_user_settings_mut(&mut ollama_settings_map, &user_id).clone();
                 drop(ollama_settings_map);
                 let ollama_generator = ctx.data().ollama_generator.lock().await;
-                let response = ollama_generator
-                    .generate(&prompt, settings, model_override)
-                    .await;
+                let model = ctx.data().ollama_model.lock().await.clone();
+                let response = ollama_generator.generate(&prompt, settings, model).await;
                 match response {
                     Err(e) => {
                         ctx.say_ephemeral(&format!("Error: {}", e)).await?;

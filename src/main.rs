@@ -36,6 +36,7 @@ pub struct Data {
     pub track_player_lock: Arc<Mutex<()>>,
     pub ollama_users: Mutex<HashSet<UserId>>,
     pub ollama_generator: Mutex<OllamaGenerator>,
+    pub ollama_model: Arc<Mutex<Option<String>>>,
     pub ollama_settings_map: Arc<Mutex<OllamaSettingsMap>>,
 
     yt_dlp_cookies_path: Option<String>,
@@ -60,6 +61,10 @@ impl Data {
             Some(path) => Some(path),
             None => None,
         }
+    }
+
+    pub async fn set_ollama_model(&mut self, model: Option<String>) {
+        self.ollama_model = Arc::new(Mutex::new(model));
     }
 }
 
@@ -168,6 +173,7 @@ async fn main() {
                     yt_dlp_cookies_path,
                     funboy_db_path,
                     ollama_generator: Mutex::new(OllamaGenerator::new()),
+                    ollama_model: Arc::new(Mutex::new(None)),
                     ollama_settings_map: Arc::new(Mutex::new(OllamaSettingsMap::new())),
                     track_list: Mutex::new(TrackList::new()).into(),
                     imgur_client_id,
