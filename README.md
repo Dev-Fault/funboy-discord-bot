@@ -12,7 +12,7 @@ The Funboy discord bot is designed primarly to generate semi-randomized text fro
 <br>In addition, the bot is capable of playing music and sounds from the web by using the **/join_voice** command to enter a voice channel and **/play_track** to play a url or search for a track name and play it. Tracks can be individually manipulated by using **/show_tracks** to get a list of currently playing tracks and track controls.
 
 # Build Dependencies
-sqlite3, cmake, rustup, openssl
+sqlite3, cmake, rustup, openssl, libssl-dev, libsqlite3-dev
 
 # Optional Dependencies
 yt-dlp
